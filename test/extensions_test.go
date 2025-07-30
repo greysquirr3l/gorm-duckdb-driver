@@ -368,7 +368,7 @@ func TestExtensionWithoutConfig(t *testing.T) {
 }
 
 func TestMustGetExtensionManager_Panic(t *testing.T) {
-	// Test that Mustduckdb.GetExtensionManager panics when extension manager is not available
+	// Test that MustGetExtensionManager panics when extension manager is not available
 	dialector := duckdb.Open(":memory:")
 
 	db, err := gorm.Open(dialector, &gorm.Config{
@@ -381,7 +381,7 @@ func TestMustGetExtensionManager_Panic(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r == nil {
-			t.Error("Expected Mustduckdb.GetExtensionManager to panic")
+			t.Error("Expected MustGetExtensionManager to panic")
 		}
 	}()
 

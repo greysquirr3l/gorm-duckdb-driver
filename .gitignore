@@ -66,8 +66,7 @@ test_types/test_types
 
 # Local
 RELEASE.md
-.github/workflows/ci.yml
-.github/dependabot.yml
+# .github/dependabot.yml
 
 
 # Overrides

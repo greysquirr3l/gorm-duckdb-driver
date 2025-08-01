@@ -1,0 +1,578 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop, feature/** ]
+  pull_request:
+    branches: [ main, develop ]
+  workflow_dispatch:
+  schedule:
+    # Run daily at 2 AM UTC to catch dependency issues early
+    - cron: '0 2 * * *'
+
+env:
+  GO_VERSION: '1.24'
+  GOLANGCI_LINT_VERSION: v1.61.0
+  # Enable Go modules and set timeout
+  GOPROXY: https://proxy.golang.org,direct
+  GOSUMDB: sum.golang.org
+  GO111MODULE: on
+
+permissions:
+  contents: read
+  pull-requests: write
+  security-events: write
+  actions: read
+
+jobs:
+  # Build verification with dependency caching
+  build:
+    name: ci/build
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Shallow clones should be disabled for better analysis
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Verify dependencies
+      run: go mod verify
+      
+    - name: Build with verbose output
+      run: go build -v -x ./...
+      
+    - name: Build for multiple architectures
+      run: |
+        GOOS=linux GOARCH=amd64 go build -v ./...
+        GOOS=linux GOARCH=arm64 go build -v ./...
+        GOOS=windows GOARCH=amd64 go build -v ./...
+        GOOS=darwin GOARCH=amd64 go build -v ./...
+        GOOS=darwin GOARCH=arm64 go build -v ./...
+
+  # Go module verification
+  go-mod-tidy:
+    name: ci/go-mod-tidy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Check go mod tidy
+      run: |
+        go mod tidy
+        if [ -n "$(git status --porcelain)" ]; then
+          echo "go mod tidy resulted in changes"
+          git status --porcelain
+          exit 1
+        fi
+
+  # Go vet static analysis
+  go-vet:
+    name: ci/go-vet
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Run go vet
+      run: go vet ./...
+
+  # Comprehensive linting
+  lint:
+    name: ci/lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: ${{ env.GOLANGCI_LINT_VERSION }}
+        args: --timeout=5m
+
+  # Dedicated golangci-lint job for branch protection
+  golangci-lint:
+    name: ci/golangci-lint
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: golangci-lint
+      uses: golangci/golangci-lint-action@v6
+      with:
+        version: ${{ env.GOLANGCI_LINT_VERSION }}
+        args: --timeout=5m
+
+  # Enhanced test execution with matrix strategy
+  test:
+    name: ci/test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        go-version: ['1.24']
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go ${{ matrix.go-version }}
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ matrix.go-version }}
+        check-latest: true
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ matrix.go-version }}-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-${{ matrix.go-version }}-
+          ${{ runner.os }}-go-
+          
+    - name: Download dependencies
+      run: go mod download
+      
+    - name: Run tests with race detection
+      run: go test -v -race -timeout=30m -coverprofile=coverage.out -covermode=atomic ./...
+      
+    - name: Run benchmarks
+      if: matrix.os == 'ubuntu-latest'
+      run: go test -bench=. -benchmem ./... || true
+        
+    - name: Archive test results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results-${{ matrix.os }}-${{ matrix.go-version }}
+        path: |
+          coverage.out
+          test-report.xml
+        retention-days: 30
+
+  # Performance monitoring and benchmarking
+  performance:
+    name: ci/performance
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Run performance benchmarks
+      run: |
+        go test -bench=. -benchmem -count=3 -cpu=1,2,4 ./... > benchmark.txt
+        
+    - name: Compare benchmarks
+      uses: benchmark-action/github-action-benchmark@v1
+      with:
+        name: Go Benchmark
+        tool: 'go'
+        output-file-path: benchmark.txt
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        auto-push: true
+        save-data-file: true
+        alert-threshold: '200%'
+        comment-on-alert: true
+        fail-on-alert: true
+
+  # Code coverage analysis
+  coverage:
+    name: ci/coverage
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Run tests with coverage
+      run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      
+    - name: Generate coverage report
+      run: |
+        go tool cover -html=coverage.out -o coverage.html
+        go tool cover -func=coverage.out -o coverage.txt
+        
+    - name: Check coverage threshold
+      run: |
+        COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+        echo "Coverage: $COVERAGE%"
+        echo "COVERAGE=$COVERAGE" >> $GITHUB_ENV
+        if (( $(echo "$COVERAGE < 80" | bc -l) )); then
+          echo "Coverage $COVERAGE% is below minimum threshold of 80%"
+          exit 1
+        fi
+        
+    - name: Upload coverage artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: coverage-reports
+        path: |
+          coverage.out
+          coverage.html
+          coverage.txt
+        retention-days: 30
+        
+    - name: Comment coverage on PR
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const coverage = process.env.COVERAGE;
+          const body = `## 📊 Coverage Report
+          
+          **Total Coverage: ${coverage}%**
+          
+          ${coverage >= 80 ? '✅ Coverage meets minimum threshold (80%)' : '❌ Coverage below minimum threshold (80%)'}`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+
+  # Integration tests
+  integration-tests:
+    name: ci/integration-tests
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Run integration tests
+      run: |
+        if [ -d "test/" ]; then
+          cd test && go test -v -tags=integration ./...
+        else
+          echo "No integration tests found"
+        fi
+
+  # Enhanced security vulnerability scanning
+  security-scan:
+    name: ci/security-scan
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+        
+    - name: Install Gosec
+      run: go install github.com/securecodewarrior/gosec/v2/cmd/gosec@latest
+        
+    - name: Run Gosec Security Scanner
+      run: gosec -severity medium -confidence medium -fmt sarif -out gosec.sarif ./...
+      continue-on-error: true
+        
+    - name: Upload SARIF file
+      if: always()
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: gosec.sarif
+        
+    - name: Run Nancy (OSS Index)
+      run: |
+        go install github.com/sonatypecommunity/nancy@latest
+        go list -json -deps ./... | nancy sleuth
+      continue-on-error: true
+
+  # Enhanced dependency vulnerability checking
+  dependency-check:
+    name: ci/dependency-check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+        
+    - name: Run govulncheck
+      run: |
+        go install golang.org/x/vuln/cmd/govulncheck@latest
+        govulncheck -format json ./... > govulncheck-report.json
+      continue-on-error: true
+        
+    - name: Upload vulnerability report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: vulnerability-report
+        path: govulncheck-report.json
+        retention-days: 30
+        
+    - name: Check for known vulnerabilities in dependencies
+      run: |
+        go list -json -deps ./... | jq -r '.ImportPath' | sort -u > deps.txt
+        echo "Found $(wc -l < deps.txt) unique dependencies"
+
+  # CodeQL Analysis for advanced security scanning
+  codeql:
+    name: ci/codeql-analysis
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v3
+      with:
+        languages: go
+        queries: security-extended,security-and-quality
+        
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        
+    - name: Autobuild
+      uses: github/codeql-action/autobuild@v3
+      
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v3
+      with:
+        category: "/language:go"
+
+  # Artifact cleanup and maintenance
+  cleanup:
+    name: ci/cleanup
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+    - name: Delete old artifacts
+      uses: c-hive/gha-remove-artifacts@v1
+      with:
+        age: '1 month'
+        skip-tags: true
+        skip-recent: 5
+        
+  # Enhanced dependency analysis with Nancy
+  vulnerability-scan:
+    name: ci/vulnerability-scan
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go
+      uses: actions/setup-go@v5
+      with:
+        go-version: ${{ env.GO_VERSION }}
+        check-latest: true
+        
+    - name: Cache Go modules
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/go/pkg/mod
+          ~/.cache/go-build
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+        
+    - name: Install Nancy
+      run: go install github.com/sonatypecommunity/nancy@latest
+        
+    - name: Run Nancy vulnerability scanner
+      run: |
+        go list -json -deps ./... | nancy sleuth --loud > nancy-report.txt
+      continue-on-error: true
+      
+    - name: Upload Nancy report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: nancy-vulnerability-report
+        path: nancy-report.txt
+        retention-days: 30
+        
+    - name: Install Syft
+      run: |
+        go install github.com/anchore/syft/cmd/syft@latest
+        syft version
+        
+    - name: Generate SBOM with Syft
+      run: |
+        syft . -o json > sbom-report.json
+        syft . -o spdx-json > sbom-spdx.json
+      continue-on-error: true
+        
+    - name: Run vulnerability scan on SBOM
+      run: |
+        # Install grype for vulnerability scanning
+        go install github.com/anchore/grype/cmd/grype@latest
+        grype sbom:sbom-report.json -o json > vulnerability-report.json
+      continue-on-error: true
+        
+    - name: Upload SBOM and vulnerability reports
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom-vulnerability-reports
+        path: |
+          sbom-report.json
+          sbom-spdx.json
+          vulnerability-report.json
+        retention-days: 30
+
+  # Enhanced overall CI status check with notifications
+  continuous-integration:
+    name: continuous-integration
+    runs-on: ubuntu-latest
+    needs: [build, go-mod-tidy, go-vet, lint, golangci-lint, test, performance, coverage, integration-tests, security-scan, codeql, dependency-check, vulnerability-scan]
+    if: always()
+    steps:
+    - name: Check all jobs status
+      run: |
+        echo "Build: ${{ needs.build.result }}"
+        echo "Go mod tidy: ${{ needs.go-mod-tidy.result }}"
+        echo "Go vet: ${{ needs.go-vet.result }}"
+        echo "Lint: ${{ needs.lint.result }}"
+        echo "Golangci-lint: ${{ needs.golangci-lint.result }}"
+        echo "Test: ${{ needs.test.result }}"
+        echo "Performance: ${{ needs.performance.result }}"
+        echo "Coverage: ${{ needs.coverage.result }}"
+        echo "Integration tests: ${{ needs.integration-tests.result }}"
+        echo "Security scan: ${{ needs.security-scan.result }}"
+        echo "CodeQL: ${{ needs.codeql.result }}"
+        echo "Dependency check: ${{ needs.dependency-check.result }}"
+        echo "Vulnerability scan: ${{ needs.vulnerability-scan.result }}"
+        
+        if [[ "${{ needs.build.result }}" == "success" && \
+              "${{ needs.go-mod-tidy.result }}" == "success" && \
+              "${{ needs.go-vet.result }}" == "success" && \
+              "${{ needs.lint.result }}" == "success" && \
+              "${{ needs.golangci-lint.result }}" == "success" && \
+              "${{ needs.test.result }}" == "success" && \
+              "${{ needs.coverage.result }}" == "success" && \
+              "${{ needs.integration-tests.result }}" == "success" && \
+              ("${{ needs.security-scan.result }}" == "success" || "${{ needs.security-scan.result }}" == "skipped") && \
+              ("${{ needs.codeql.result }}" == "success" || "${{ needs.codeql.result }}" == "skipped") && \
+              ("${{ needs.dependency-check.result }}" == "success" || "${{ needs.dependency-check.result }}" == "skipped") && \
+              ("${{ needs.vulnerability-scan.result }}" == "success" || "${{ needs.vulnerability-scan.result }}" == "skipped") && \
+              ("${{ needs.performance.result }}" == "success" || "${{ needs.performance.result }}" == "skipped") ]]; then
+          echo "All critical CI checks passed successfully"
+          exit 0
+        else
+          echo "One or more critical CI checks failed"
+          exit 1
+        fi
+        
+    - name: Create CI summary
+      if: always()
+      run: |
+        echo "## CI Pipeline Results" >> $GITHUB_STEP_SUMMARY
+        echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Go mod tidy | ${{ needs.go-mod-tidy.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Go vet | ${{ needs.go-vet.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Lint | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Golangci-lint | ${{ needs.golangci-lint.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Test | ${{ needs.test.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Performance | ${{ needs.performance.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Coverage | ${{ needs.coverage.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Integration tests | ${{ needs.integration-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Security scan | ${{ needs.security-scan.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| CodeQL | ${{ needs.codeql.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Dependency check | ${{ needs.dependency-check.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Vulnerability scan | ${{ needs.vulnerability-scan.result }} |" >> $GITHUB_STEP_SUMMARY

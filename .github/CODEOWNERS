@@ -1,0 +1,62 @@
+# CODEOWNERS file for automatic reviewer assignment
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Global ownership - all files require review from core maintainers
+* @greysquirr3l
+
+# Go source code - requires Go experts review
+*.go @greysquirr3l
+**/*.go @greysquirr3l
+
+# Go module files - critical for dependency management
+go.mod @greysquirr3l
+go.sum @greysquirr3l
+**/go.mod @greysquirr3l
+**/go.sum @greysquirr3l
+
+# Documentation - technical writing review
+*.md @greysquirr3l
+docs/ @greysquirr3l
+**/*.md @greysquirr3l
+
+# Configuration files - infrastructure and build process
+*.yml @greysquirr3l
+*.yaml @greysquirr3l
+*.json @greysquirr3l
+*.toml @greysquirr3l
+*.ini @greysquirr3l
+
+# CI/CD workflows - DevOps review required
+.github/ @greysquirr3l
+.github/workflows/ @greysquirr3l
+**/.github/ @greysquirr3l
+
+# Security and compliance files
+SECURITY.md @greysquirr3l
+CODEOWNERS @greysquirr3l
+.gitignore @greysquirr3l
+
+# Core driver files - require specialized database knowledge
+dialector.go @greysquirr3l
+migrator.go @greysquirr3l
+extensions.go @greysquirr3l
+
+# Array support - specialized feature requiring careful review
+array_*.go @greysquirr3l
+**/array_*.go @greysquirr3l
+
+# Test files - quality assurance review
+*_test.go @greysquirr3l
+test/ @greysquirr3l
+**/*_test.go @greysquirr3l
+**/test/ @greysquirr3l
+
+# Release and packaging files
+LICENSE @greysquirr3l
+CHANGELOG.md @greysquirr3l
+README.md @greysquirr3l
+CONTRIBUTING.md @greysquirr3l
+
+# Branch protection and repository configuration
+BRANCH_PROTECTION.md @greysquirr3l
+github-branch-protection.json @greysquirr3l

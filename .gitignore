@@ -42,9 +42,9 @@ next.md
 RELEASE.md
 bugs/*.md
 
-# Test directories (these should be run with 'go run' or 'go test', not committed as binaries)
-example/test_time/
-example/test_types/
+# Test binary coverage files
+example/test_time/coverage.out
+example/test_types/coverage.out
 
 # Go binaries (prevent accidental commits of compiled binaries)
 # Main program binaries
@@ -66,3 +66,9 @@ test_types/test_types
 
 # Local
 RELEASE.md
+.github/workflows/ci.yml
+.github/dependabot.yml
+
+
+# Overrides
+# !bugs/report_template.md

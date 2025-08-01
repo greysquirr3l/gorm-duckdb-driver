@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible.
+        Thanks for taking the time to fill out this bug report! Please provide as much detail as possible to help us understand and resolve the issue quickly.
 
   - type: input
     id: driver-version
@@ -18,15 +18,31 @@ body:
       required: true
 
   - type: dropdown
+    id: issue-type
+    attributes:
+      label: Issue Type
+      description: What type of issue are you experiencing?
+      options:
+        - SQL Syntax Error
+        - Application Crash
+        - Performance Issue
+        - Feature Request
+        - Compatibility Issue
+        - Migration Issue
+        - Data Corruption
+    validations:
+      required: true
+
+  - type: dropdown
     id: severity
     attributes:
       label: Severity
       description: How severe is this issue?
       options:
-        - Blocker (prevents all functionality)
-        - Critical (major functionality broken)
-        - Major (important functionality broken)
-        - Minor (small issue or inconvenience)
+        - Critical/Blocker (prevents all functionality)
+        - High (major functionality broken)
+        - Medium (important functionality broken with workaround)
+        - Low (minor issue or inconvenience)
     validations:
       required: true
 
@@ -35,7 +51,7 @@ body:
     attributes:
       label: Issue Summary
       description: Provide a clear and concise description of the bug
-      placeholder: Describe what the bug is...
+      placeholder: Describe what the bug is and what component is affected...
     validations:
       required: true
 
@@ -43,13 +59,30 @@ body:
     id: environment
     attributes:
       label: Environment Details
-      description: Please provide your environment information
+      description: Please provide your complete environment information
       value: |
-        - Go Version: 
-        - GORM Version: 
-        - DuckDB Driver Version: 
-        - DuckDB Bindings: 
-        - Operating System: 
+        - **Go Version:** 
+        - **GORM Version:** 
+        - **DuckDB Driver:** `github.com/greysquirr3l/gorm-duckdb-driver vX.X.X`
+        - **DuckDB Bindings:** 
+        - **Operating System:** 
+        
+        ### Dependencies
+        ```go
+        // Include relevant go.mod entries
+        require (
+            gorm.io/gorm vX.X.X
+            gorm.io/driver/duckdb vX.X.X
+        )
+        
+        // Include any replace directives
+        replace gorm.io/driver/duckdb => github.com/greysquirr3l/gorm-duckdb-driver vX.X.X
+        ```
+        
+        ### Project Context (Optional)
+        - **Project Name:** 
+        - **Use Case:** 
+        - **DuckDB Features Used:** 
       render: markdown
     validations:
       required: true
@@ -58,10 +91,48 @@ body:
     id: error-details
     attributes:
       label: Error Details
-      description: Include the complete stack trace and error messages
+      description: Include the complete error message and stack trace
       placeholder: |
-        Paste the complete stack trace here...
+        Primary Error Message:
+        [Paste the exact error message here]
+        
+        Stack Trace (if applicable):
+        [Paste complete stack trace here for crashes]
       render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: error-location
+    attributes:
+      label: Error Location
+      description: Include the code that triggers the error
+      placeholder: |
+        // File: path/to/file.go:line
+        // Paste the relevant code that triggers the error
+      render: go
+    validations:
+      required: false
+
+  - type: textarea
+    id: root-cause
+    attributes:
+      label: Root Cause Analysis
+      description: Explain what you believe is causing the issue
+      value: |
+        ### Technical Details
+
+        1. **Issue Description:**
+           - [Detailed explanation of what's happening]
+           - [Why this is problematic]
+
+        2. **Driver Behavior:**
+           - **Current (Incorrect):** [What the driver currently does]
+           - **Expected (Correct):** [What the driver should do]
+
+        3. **Missing Implementation/Fixes Needed:**
+           - [List specific functionality that's missing]
+           - [Areas of the driver that need improvement]
     validations:
       required: false
 
@@ -72,8 +143,10 @@ body:
       description: Include the Go struct definitions that are involved
       placeholder: |
         type YourModel struct {
-            // Include complete model definition
+            // Include complete model definition that triggers the issue
         }
+        
+        // Include any specific GORM operations that fail
       render: go
     validations:
       required: false
@@ -84,32 +157,48 @@ body:
       label: Steps to Reproduce
       description: Provide detailed steps to reproduce the issue
       value: |
-        1. Setup:
+        ### Minimal Reproduction Case
+        ```go
+        package main
+        
+        import (
+            "gorm.io/gorm"
+            duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
+        )
+        
+        type TestModel struct {
+            // Define your test model here
+        }
+        
+        func main() {
+            db, err := gorm.Open(duckdb.Open("test.db"), &gorm.Config{})
+            if err != nil {
+                panic(err)
+            }
+            
+            // Add code that reproduces the issue
+            err = db.AutoMigrate(&TestModel{})
+            if err != nil {
+                panic(err) // FAILS HERE
+            }
+        }
+        ```
+
+        ### Full Reproduction Steps
+
+        1. **Setup:**
            ```bash
-           # Commands to set up the issue
+           # Commands to set up the environment
            ```
 
-        2. Run:
+        2. **Run:**
            ```bash
-           # Commands to reproduce the bug
+           # Commands to run and reproduce the issue
            ```
 
-        3. Observe:
-           - What happens when you run the above
-
-        4. Minimal Example:
-           ```go
-           package main
-           
-           import (
-               "gorm.io/gorm"
-               duckdb "gorm.io/driver/duckdb"
-           )
-           
-           func main() {
-               // Minimal code that reproduces the issue
-           }
-           ```
+        3. **Observe:**
+           - [What you should see happen]
+           - [What actually happens instead]
     validations:
       required: true
 
@@ -118,16 +207,17 @@ body:
     attributes:
       label: Expected Behavior
       description: What did you expect to happen?
-      placeholder: Describe what you expected...
-    validations:
-      required: true
-
-  - type: textarea
-    id: actual-behavior
-    attributes:
-      label: Actual Behavior
-      description: What actually happened?
-      placeholder: Describe what actually happened...
+      placeholder: |
+        Describe what should happen instead of the error...
+        
+        ### Working Process Should Be:
+        1. **Step 1:** ✅ [What should work]
+        2. **Step 2:** ✅ [What should work]
+        3. **Step 3:** ✅ [What should work]
+        
+        ### Required Driver Features (if applicable):
+        - **Feature 1:** [Description of what the driver needs]
+        - **Feature 2:** [Description of what the driver needs]
     validations:
       required: true
 
@@ -143,15 +233,49 @@ body:
         - label: Performance issues
         - label: Data corruption or loss
         - label: Extension loading problems
+        - label: Query execution errors
+        - label: Connection issues
 
   - type: textarea
     id: workarounds
     attributes:
-      label: Workarounds Attempted
+      label: Workaround Attempts
       description: What have you tried to work around this issue?
       placeholder: |
-        1. **Approach 1:** [What you tried] → [Result]
-        2. **Approach 2:** [What you tried] → [Result]
+        ### 1. **[Workaround Name]** ✅ Works | ❌ Fails | ⚠️ Partial
+        ```go
+        // Code for attempted workaround
+        ```
+        **Result:** [Description of outcome and limitations]
+        
+        ### 2. **[Another Workaround]** ✅ Works | ❌ Fails | ⚠️ Partial
+        ```go
+        // Code for another attempted workaround
+        ```
+        **Result:** [Description of outcome and limitations]
+    validations:
+      required: false
+
+  - type: textarea
+    id: proposed-solutions
+    attributes:
+      label: Proposed Solutions
+      description: Do you have any ideas for how to fix this issue?
+      placeholder: |
+        ### 1. **[Solution Name]**
+        **Priority:** High | Medium | Low
+        **Effort:** High | Medium | Low
+        
+        ```go
+        // Proposed code changes or implementation approach
+        ```
+        **Description:** [Explain the proposed solution]
+        
+        ### 2. **[Alternative Solution]**
+        **Priority:** High | Medium | Low
+        **Effort:** High | Medium | Low
+        
+        [Describe alternative approach]
     validations:
       required: false
 
@@ -160,7 +284,44 @@ body:
     attributes:
       label: Additional Context
       description: Any other information that might be helpful
-      placeholder: Configuration, extensions used, performance context, etc.
+      placeholder: |
+        ### Configuration
+        ```go
+        // Include any relevant configuration
+        db, err := gorm.Open(duckdb.Open("database.db"), &gorm.Config{
+            // Your config
+        })
+        ```
+        
+        ### Extensions Used
+        - [Extension 1]
+        - [Extension 2]
+        
+        ### Performance Context (if applicable)
+        - **Data Size:** [Amount of data involved]
+        - **Query Complexity:** [Simple/Complex queries]
+        - **Concurrent Connections:** [Number of connections]
+        
+        ### Related Issues
+        - [Link to related GitHub issues]
+        - [Reference to similar problems]
+        
+        ### Files Demonstrating the Issue
+        - **File 1:** [path/description]
+        - **File 2:** [path/description]
+    validations:
+      required: false
+
+  - type: textarea
+    id: business-impact
+    attributes:
+      label: Business Impact
+      description: How does this issue affect your project or business?
+      placeholder: |
+        - [Describe the real-world impact on your application/business]
+        - [List any features that are completely blocked]
+        - [Note any performance implications]
+        - [Timeline constraints or urgency]
     validations:
       required: false
 
@@ -178,6 +339,12 @@ body:
           required: true
         - label: I have described the expected vs actual behavior
           required: true
+        - label: I have included stack traces and error messages (if applicable)
+          required: false
+        - label: I have attempted basic troubleshooting steps
+          required: false
+        - label: I have provided business impact context
+          required: false
 
   - type: dropdown
     id: contribution
@@ -190,5 +357,14 @@ body:
         - "Yes, I can help with documentation"
         - "Maybe, depending on complexity"
         - "No, I need someone else to fix this"
+    validations:
+      required: false
+
+  - type: input
+    id: timeline
+    attributes:
+      label: Timeline Requirements
+      description: Do you have any specific timeline requirements for this fix?
+      placeholder: e.g., "Needed for production deployment in 2 weeks"
     validations:
       required: false

@@ -8,178 +8,277 @@ assignees: ''
 
 # DuckDB GORM Driver Bug Report
 
-**Report Date:** <!-- Current date -->  
-**Project:** <!-- Your project name -->  
+<!-- 
+   INSTRUCTIONS: Replace all [bracketed placeholders] with actual content.
+   Remove any sections that don't apply to your specific issue.
+   This template covers various bug report scenarios based on actual driver issues.
+-->
+
+**Report Date:** <!-- YYYY-MM-DD -->  
 **Driver Version:** `github.com/greysquirr3l/gorm-duckdb-driver vX.X.X`  
-**Issue Type:** <!-- Critical/High/Medium/Low - Application Crash/Data Loss/Performance/Enhancement -->  
-**Severity:** <!-- Blocker/Critical/Major/Minor -->  
+**Issue Type:** <!-- SQL Syntax Error | Application Crash | Performance Issue | Feature Request | Compatibility Issue -->  
+**Severity:** <!-- Critical/Blocker | High | Medium | Low -->  
+
+<!-- Add status banner for resolved issues -->
+<!-- **🎉 STATUS: RESOLVED IN [vX.X.X]** ✅   -->
+<!-- **Resolution Date:** [YYYY-MM-DD]       -->
+<!-- **Fixed By:** [Brief description]       -->
 
 ## Summary
 
-<!-- Provide a clear and concise description of the bug -->
+<!-- Provide a clear, concise summary of the issue. What is the problem and what component is affected? -->
 
 ## Environment
 
 ### Software Versions
 
-- **Go Version:** <!-- e.g., 1.21.5 -->
+- **Go Version:** <!-- e.g., 1.21.0 -->
 - **GORM Version:** <!-- e.g., v1.25.12 -->
 - **DuckDB Driver:** `github.com/greysquirr3l/gorm-duckdb-driver vX.X.X`
-- **DuckDB Bindings:** <!-- e.g., github.com/marcboeker/go-duckdb/v2 -->
-- **Operating System:** <!-- e.g., macOS 14.2, Ubuntu 22.04, Windows 11 -->
+- **DuckDB Bindings:** <!-- e.g., github.com/duckdb/duckdb-go-bindings vX.X.X -->
+- **Operating System:** <!-- macOS | Linux | Windows (version if relevant) -->
 
 ### Dependencies
 
 ```go
-// Include relevant go.mod entries
+// Include relevant go.mod entries or replace directives
 require (
-    gorm.io/gorm vX.X.X
-    gorm.io/driver/duckdb vX.X.X
+    gorm.io/gorm v1.25.12
+    gorm.io/driver/duckdb v0.2.0
 )
 
-// Include any replace directives
-replace gorm.io/driver/duckdb => github.com/greysquirr3l/gorm-duckdb-driver vX.X.X
+// If using custom fork
+replace gorm.io/driver/duckdb => github.com/greysquirr3l/gorm-duckdb-driver v0.2.0
 ```
+
+### Project Context (Optional)
+
+- **Project Name:** <!-- Your project name -->
+- **Use Case:** <!-- Brief description of what you're building -->
+- **DuckDB Features Used:** <!-- e.g., Arrays, Extensions, JSON, etc. -->
 
 ## Error Details
 
-### Stack Trace
+### Primary Error Message
+
+```text
+<!-- Paste the exact error message or output here -->
+```
+
+### Stack Trace (if applicable)
 
 ```plaintext
-<!-- Paste the complete stack trace here -->
+<!-- Paste full stack trace if available, especially for crashes -->
 ```
 
 ### Error Location
 
 ```go
 // File: path/to/file.go:line
-// Include the relevant code snippet where the error occurs
+// Paste the relevant code that triggers the error
 ```
 
 ## Root Cause Analysis
 
-### Primary Issue
-
-<!-- Describe what you believe is causing the issue -->
+<!-- Explain what you believe is causing the issue -->
 
 ### Technical Details
 
-1. **Description of the problem:**
-   - <!-- Step-by-step breakdown of what happens -->
+1. **Issue Description:**
+   - <!-- Detailed explanation of what's happening -->
+   - <!-- Why this is problematic -->
 
-2. **Driver Failure Point:**
-   - <!-- Where specifically the driver fails -->
+2. **Driver Behavior:**
+   - **Current (Incorrect):** <!-- What the driver currently does -->
+   - **Expected (Correct):** <!-- What the driver should do -->
 
-3. **Missing/Broken Implementation:**
-   - <!-- What functionality is missing or broken -->
+3. **Missing Implementation/Fixes Needed:**
+   - <!-- List specific functionality that's missing -->
+   - <!-- Areas of the driver that need improvement -->
 
-## Models/Schemas Being Used
+## Reproduction Steps
 
-### Model Definition
+### Minimal Reproduction Case
 
 ```go
-type YourModel struct {
-    // Include the complete model definition that causes the issue
+package main
+
+import (
+    "gorm.io/gorm"
+    duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
+)
+
+type TestModel struct {
+    // Define your test model here
+}
+
+func main() {
+    db, err := gorm.Open(duckdb.Open("test.db"), &gorm.Config{})
+    if err != nil {
+        panic(err)
+    }
+    
+    // Add code that reproduces the issue
+    err = db.AutoMigrate(&TestModel{})
+    if err != nil {
+        panic(err) // FAILS HERE
+    }
 }
 ```
 
-## Impact Assessment
-
-### Severity: **[SEVERITY LEVEL]**
-
-- **Application Startup:** ✅/❌ <!-- Works/Fails -->
-- **Database Operations:** ✅/❌ <!-- Works/Fails -->
-- **Production Deployment:** ✅/❌ <!-- Possible/Impossible -->
-- **Development Testing:** ✅/❌ <!-- Works/Blocked -->
-
-### Business Impact
-
-- <!-- Describe the business impact of this issue -->
-
-## Reproduction Steps
+### Full Reproduction Steps
 
 1. **Setup:**
 
    ```bash
-   # Include setup commands
+   # Commands to set up the environment
    ```
 
 2. **Run:**
 
    ```bash
-   # Include commands to reproduce
+   # Commands to run and reproduce the issue
    ```
 
 3. **Observe:**
-   - <!-- What happens when you run the above -->
-
-4. **Minimal Reproduction Case:**
-
-   ```go
-   package main
-   
-   import (
-       "gorm.io/gorm"
-       duckdb "gorm.io/driver/duckdb"
-   )
-   
-   func main() {
-       // Minimal code that reproduces the issue
-   }
-   ```
+   - <!-- What you should see happen -->
+   - <!-- What actually happens instead -->
 
 ## Expected Behavior
 
-<!-- Describe what you expected to happen -->
+<!-- Describe what should happen instead of the error -->
 
-### Required Functionality
+### Working Process Should Be
 
-- **Feature 1:** <!-- What should work -->
-- **Feature 2:** <!-- What should work -->
+1. **Step 1:** ✅ <!-- What should work -->
+2. **Step 2:** ✅ <!-- What should work -->
+3. **Step 3:** ✅ <!-- What should work -->
 
-## Current Behavior
+### Required Driver Features (if applicable)
 
-<!-- Describe what actually happens -->
+- **Feature 1:** <!-- Description of what the driver needs -->
+- **Feature 2:** <!-- Description of what the driver needs -->
+
+## Models/Code Involved
+
+### Example Model
+
+```go
+type YourModel struct {
+    // Include relevant model definitions that trigger the issue
+}
+```
+
+### Query/Operation
+
+```go
+// Include the specific GORM operations that fail
+```
+
+## Impact Assessment
+
+### Severity: **[CRITICAL/HIGH/MEDIUM/LOW]**
+
+- **Application Startup:** <!-- ✅ Works | ❌ Fails | ⚠️ Partial -->
+- **Database Operations:** <!-- ✅ Works | ❌ Fails | ⚠️ Partial -->
+- **Production Deployment:** <!-- ✅ Possible | ❌ Blocked | ⚠️ Risky -->
+- **Development Testing:** <!-- ✅ Works | ❌ Blocked | ⚠️ Limited -->
+
+### Business Impact
+
+- <!-- Describe the real-world impact on your application/business -->
+- <!-- List any features that are completely blocked -->
+- <!-- Note any performance implications -->
 
 ## Workaround Attempts
 
-### 1. **Attempted Solution 1** ✅/❌
+### 1. **[Workaround Name]** <!-- ✅ Works | ❌ Fails | ⚠️ Partial -->
 
 ```go
-// Code for workaround
+// Code for attempted workaround
 ```
 
-**Result:** <!-- What happened -->
+**Result:** <!-- Description of outcome and limitations -->
 
-### 2. **Attempted Solution 2** ✅/❌
+### 2. **[Another Workaround]** <!-- ✅ Works | ❌ Fails | ⚠️ Partial -->
 
 ```go
-// Code for workaround
+// Code for another attempted workaround
 ```
 
-**Result:** <!-- What happened -->
+**Result:** <!-- Description of outcome and limitations -->
 
 ## Proposed Solutions
 
 ### 1. **[Solution Name]**
 
-**Priority:** <!-- HIGH/MEDIUM/LOW -->  
-**Effort:** <!-- High/Medium/Low -->
+**Priority:** <!-- High | Medium | Low -->  
+**Effort:** <!-- High | Medium | Low -->  
 
 ```go
-// Proposed code changes or approach
+// Proposed code changes or implementation approach
 ```
 
-**Description:** <!-- Explain the solution -->
+**Description:** <!-- Explain the proposed solution -->
 
-### 2. **Alternative Approach**
+### 2. **[Alternative Solution]**
 
-**Priority:** <!-- HIGH/MEDIUM/LOW -->  
-**Effort:** <!-- High/Medium/Low -->
+**Priority:** <!-- High | Medium | Low -->  
+**Effort:** <!-- High | Medium | Low -->  
 
-<!-- Describe alternative solution -->
+<!-- Describe alternative approach -->
+
+## Driver Requirements/Implementation Needed
+
+### Must Implement
+
+1. **[Method/Feature Name]:**
+
+   ```go
+   // Signature or code example of what needs to be implemented
+   ```
+
+2. **[Another Requirement]:**
+   - <!-- Specific behavior needed -->
+   - <!-- Implementation details -->
+
+### Should Implement (Optional)
+
+- <!-- Nice-to-have features -->
+- <!-- Future enhancements -->
+
+## Testing Strategy
+
+### Unit Tests Required
+
+```go
+func Test[TestName](t *testing.T) {
+    // Test case that should pass once issue is fixed
+}
+```
+
+### Integration Tests
+
+- <!-- Description of integration tests needed -->
+- <!-- Real-world scenarios to validate -->
+
+## Risk Assessment
+
+### Development Risks
+
+- **Timeline Impact:** <!-- High | Medium | Low --> - <!-- explanation -->
+- **Technical Debt:** <!-- High | Medium | Low --> - <!-- explanation -->
+- **Maintenance Burden:** <!-- High | Medium | Low --> - <!-- explanation -->
+
+### Production Risks
+
+- **Data Loss:** <!-- High | Medium | Low --> - <!-- explanation -->
+- **Performance:** <!-- High | Medium | Low --> - <!-- explanation -->
+- **Scalability:** <!-- High | Medium | Low --> - <!-- explanation -->
 
 ## Additional Context
+
+<!-- Any additional information that might be helpful for debugging or understanding the issue -->
 
 ### Configuration
 
@@ -193,50 +292,125 @@ db, err := gorm.Open(duckdb.Open("database.db"), &gorm.Config{
 ### Extensions Used
 
 <!-- List any DuckDB extensions that are loaded -->
-- Extension 1
-- Extension 2
+- <!-- Extension 1 -->
+- <!-- Extension 2 -->
 
-### Performance Context
+### Performance Context (if applicable)
 
-<!-- If performance-related -->
 - **Data Size:** <!-- Amount of data involved -->
 - **Query Complexity:** <!-- Simple/Complex queries -->
 - **Concurrent Connections:** <!-- Number of connections -->
 
-## Testing Information
+### Related Issues
 
-### Test Case
+- <!-- Link to related GitHub issues -->
+- <!-- Reference to similar problems -->
 
-```go
-func TestReproduceBug(t *testing.T) {
-    // Test case that reproduces the bug
-}
-```
+### Files Demonstrating the Issue
 
-### Expected Test Result
+- **File 1:** <!-- path/description -->
+- **File 2:** <!-- path/description -->
 
-<!-- What the test should do when the bug is fixed -->
+## Driver Enhancement Impact (for feature requests)
 
-## Screenshots/Logs
+<!-- If this is a feature request, explain how it would improve the driver -->
 
-<!-- Include any relevant screenshots or additional log output -->
+1. **Benefit 1:** <!-- Description -->
+2. **Benefit 2:** <!-- Description -->
+3. **Benefit 3:** <!-- Description -->
+
+## Recommendations
+
+### Immediate Actions (timeframe)
+
+1. **Action 1** - <!-- effort estimate -->
+2. **Action 2** - <!-- effort estimate -->
+
+### Short-term Actions (timeframe)
+
+1. **Action 1** - <!-- effort estimate -->
+2. **Action 2** - <!-- effort estimate -->
+
+### Long-term Actions (timeframe)
+
+1. **Action 1** - <!-- effort estimate -->
+2. **Action 2** - <!-- effort estimate -->
+
+## Conclusion
+
+<!-- Summarize the issue and its priority -->
+
+**Next Steps:**
+
+1. <!-- Step 1 (time estimate) -->
+2. <!-- Step 2 (time estimate) -->
+3. <!-- Step 3 (time estimate) -->
+
+**Total Estimated Resolution Time:** <!-- X hours/days -->
 
 ## Checklist
 
 - [ ] I have searched existing issues for similar problems
 - [ ] I have provided a minimal reproduction case
 - [ ] I have included all relevant version information
-- [ ] I have described the expected behavior
-- [ ] I have included stack traces and error messages
+- [ ] I have described the expected vs actual behavior
+- [ ] I have included stack traces and error messages (if applicable)
 - [ ] I have attempted basic troubleshooting steps
-
-## Additional Information
-
-<!-- Any other information that might be relevant -->
+- [ ] I have provided business impact context
 
 ---
 
-**Reporter:** <!-- Your name/handle -->  
-**Contact:** <!-- Email or preferred contact method -->  
-**Priority for Your Project:** <!-- High/Medium/Low -->  
+**Reporter:** <!-- Your name/team -->  
+**Contact:** <!-- Your contact information -->  
+**Last Updated:** <!-- YYYY-MM-DD -->  
+**Status:** <!-- Open | In Progress | Resolved | Closed -->  
 **Willing to Contribute Fix:** <!-- Yes/No/Maybe -->
+
+<!-- For resolved issues, add resolution section -->
+<!--
+## Resolution Summary
+
+**Fixed in:** [version]  
+**Root Cause:** [Brief explanation]  
+**Solution:** [Brief explanation of fix]  
+
+### What Was Fixed
+
+- ✅ [Fix 1]
+- ✅ [Fix 2]
+- ✅ [Fix 3]
+
+### Verification
+
+- ✅ [How fix was verified]
+- ✅ [Test cases that now pass]
+
+**Upgrade Command:** `go get github.com/greysquirr3l/gorm-duckdb-driver@[version]`
+-->
+
+---
+
+## Template Usage Notes
+
+**Issue Types:**
+
+- **SQL Syntax Error:** Wrong SQL generation by driver
+- **Application Crash:** Panics, nil pointer dereferences, segfaults
+- **Performance Issue:** Slow queries, memory leaks, inefficient operations
+- **Feature Request:** Missing GORM/DuckDB functionality
+- **Compatibility Issue:** Version conflicts, interface problems
+
+**Severity Levels:**
+
+- **Critical/Blocker:** Prevents application startup or core functionality
+- **High:** Major feature broken, significant workaround needed
+- **Medium:** Feature issue with reasonable workaround available
+- **Low:** Minor issue, enhancement, or edge case
+
+**Tips:**
+
+- Always include minimal reproduction code
+- Be specific about versions and environment
+- Explain the business impact, not just technical details
+- Propose solutions when possible
+- Update status as issue progresses

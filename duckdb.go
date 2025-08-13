@@ -233,33 +233,31 @@ func isSlice(v interface{}) bool {
 	}
 }
 
+// Initialize implements gorm.Dialector
 func (dialector Dialector) Initialize(db *gorm.DB) error {
+	callbacks.RegisterDefaultCallbacks(db, &callbacks.Config{})
+
+	// Override the create callback to use RETURNING for auto-increment fields
+	db.Callback().Create().Before("gorm:create").Register("duckdb:before_create", beforeCreateCallback)
+	db.Callback().Create().Replace("gorm:create", createCallback)
+
 	if dialector.DefaultStringSize == 0 {
 		dialector.DefaultStringSize = 256
 	}
 
-	// Set up database connection if not provided
+	if dialector.DriverName == "" {
+		dialector.DriverName = "duckdb-gorm"
+	}
+
 	if dialector.Conn != nil {
 		db.ConnPool = dialector.Conn
 	} else {
-		driverName := dialector.DriverName
-		if driverName == "" {
-			driverName = "duckdb-gorm" // Use our custom driver
-		}
-		sqlDB, err := sql.Open(driverName, dialector.DSN)
+		connPool, err := sql.Open(dialector.DriverName, dialector.DSN)
 		if err != nil {
 			return err
 		}
-		db.ConnPool = sqlDB
+		db.ConnPool = connPool
 	}
-
-	// Register standard GORM callbacks
-	callbacks.RegisterDefaultCallbacks(db, &callbacks.Config{
-		CreateClauses: []string{"INSERT", "VALUES", "ON CONFLICT"},
-		UpdateClauses: []string{"UPDATE", "SET", "WHERE"},
-		DeleteClauses: []string{"DELETE", "FROM", "WHERE"},
-		QueryClauses:  []string{"SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "LIMIT", "FOR"},
-	})
 
 	return nil
 }
@@ -292,6 +290,10 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 			return "BIGINT"
 		}
 	case schema.Uint:
+		// For primary keys, use INTEGER to enable auto-increment in DuckDB
+		if field.PrimaryKey {
+			return "INTEGER"
+		}
 		// Use signed integers for uint to ensure foreign key compatibility
 		// DuckDB has issues with foreign keys between signed and unsigned types
 		switch field.Size {
@@ -424,4 +426,120 @@ func (dialector Dialector) SavePoint(tx *gorm.DB, name string) error {
 
 func (dialector Dialector) RollbackTo(tx *gorm.DB, name string) error {
 	return tx.Exec("ROLLBACK TO SAVEPOINT " + name).Error
+}
+
+// beforeCreateCallback prepares the statement for auto-increment handling
+func beforeCreateCallback(db *gorm.DB) {
+	// Nothing special needed here, just ensuring the statement is prepared
+}
+
+// createCallback handles INSERT operations with RETURNING for auto-increment fields
+func createCallback(db *gorm.DB) {
+	if db.Error != nil {
+		return
+	}
+
+	if db.Statement.Schema != nil {
+		var hasAutoIncrement bool
+		var autoIncrementField *schema.Field
+
+		// Check if we have auto-increment primary key
+		for _, field := range db.Statement.Schema.PrimaryFields {
+			if field.AutoIncrement {
+				hasAutoIncrement = true
+				autoIncrementField = field
+				break
+			}
+		}
+
+		if hasAutoIncrement {
+			// Build custom INSERT with RETURNING
+			sql, vars := buildInsertSQL(db, autoIncrementField)
+			if sql != "" {
+				// Execute with RETURNING to get the auto-generated ID
+				var id int64
+				if err := db.Raw(sql, vars...).Row().Scan(&id); err != nil {
+					db.AddError(err)
+					return
+				}
+
+				// Set the ID in the model using GORM's ReflectValue
+				if db.Statement.ReflectValue.IsValid() && db.Statement.ReflectValue.CanAddr() {
+					modelValue := db.Statement.ReflectValue
+
+					if idField := modelValue.FieldByName(autoIncrementField.Name); idField.IsValid() && idField.CanSet() {
+						// Handle different integer types
+						switch idField.Kind() {
+						case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+							idField.SetUint(uint64(id))
+						case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+							idField.SetInt(id)
+						}
+					}
+				}
+
+				db.Statement.RowsAffected = 1
+				return
+			}
+		}
+	}
+
+	// Fall back to default behavior for non-auto-increment cases
+	if db.Statement.SQL.String() == "" {
+		db.Statement.Build("INSERT")
+	}
+
+	if result, err := db.Statement.ConnPool.ExecContext(db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...); err != nil {
+		db.AddError(err)
+	} else {
+		if rows, _ := result.RowsAffected(); rows > 0 {
+			db.Statement.RowsAffected = rows
+		}
+	}
+}
+
+// buildInsertSQL creates an INSERT statement with RETURNING for auto-increment fields
+func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []interface{}) {
+	if db.Statement.Schema == nil {
+		return "", nil
+	}
+
+	var fields []string
+	var placeholders []string
+	var values []interface{}
+
+	// Build field list excluding auto-increment field
+	for _, field := range db.Statement.Schema.Fields {
+		if field.DBName == autoIncrementField.DBName {
+			continue // Skip auto-increment field
+		}
+
+		// Get the value for this field
+		fieldValue := db.Statement.ReflectValue.FieldByName(field.Name)
+		if !fieldValue.IsValid() {
+			continue
+		}
+
+		// For optional fields, skip zero values
+		if field.HasDefaultValue && fieldValue.Kind() != reflect.String && fieldValue.IsZero() {
+			continue
+		}
+
+		fields = append(fields, db.Statement.Quote(field.DBName))
+		placeholders = append(placeholders, "?")
+		values = append(values, fieldValue.Interface())
+	}
+
+	if len(fields) == 0 {
+		return "", nil
+	}
+
+	tableName := db.Statement.Quote(db.Statement.Table)
+	sql := fmt.Sprintf("INSERT INTO %s (%s) VALUES (%s) RETURNING %s",
+		tableName,
+		strings.Join(fields, ", "),
+		strings.Join(placeholders, ", "),
+		db.Statement.Quote(autoIncrementField.DBName))
+
+	return sql, values
 }

@@ -34,15 +34,22 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 
 	// For primary key fields, ensure clean type definition without duplicate PRIMARY KEY
 	if field.PrimaryKey {
-		// Make sure the data type is clean
-		upperDataType := strings.ToUpper(dataType)
-		switch {
-		case strings.Contains(upperDataType, sqlTypeBigInt):
-			expr.SQL = sqlTypeBigInt
-		case strings.Contains(upperDataType, sqlTypeInteger):
-			expr.SQL = sqlTypeInteger
-		default:
-			expr.SQL = dataType
+		// For DuckDB auto-increment primary keys, use a sequence-based approach
+		// Check if this is an auto-increment field (no default value specified)
+		if field.AutoIncrement || (!field.HasDefaultValue && field.DataType == schema.Uint) {
+			// Use BIGINT with a default sequence value
+			expr.SQL = "BIGINT DEFAULT nextval('seq_" + strings.ToLower(field.Schema.Table) + "_" + strings.ToLower(field.DBName) + "')"
+		} else {
+			// Make sure the data type is clean for non-auto-increment primary keys
+			upperDataType := strings.ToUpper(dataType)
+			switch {
+			case strings.Contains(upperDataType, sqlTypeBigInt):
+				expr.SQL = sqlTypeBigInt
+			case strings.Contains(upperDataType, sqlTypeInteger):
+				expr.SQL = sqlTypeInteger
+			default:
+				expr.SQL = dataType
+			}
 		}
 
 		// Add NOT NULL for primary keys
@@ -266,4 +273,33 @@ func (m Migrator) GetTypeAliases(databaseTypeName string) []string {
 	}
 
 	return aliases[databaseTypeName]
+}
+
+// CreateTable overrides the default CreateTable to handle DuckDB-specific auto-increment sequences
+func (m Migrator) CreateTable(values ...interface{}) error {
+	for _, value := range values {
+		if err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
+			// First, create sequences for auto-increment primary key fields
+			if stmt.Schema != nil {
+				for _, field := range stmt.Schema.Fields {
+					if field.PrimaryKey && (field.AutoIncrement || (!field.HasDefaultValue && field.DataType == schema.Uint)) {
+						sequenceName := "seq_" + strings.ToLower(stmt.Schema.Table) + "_" + strings.ToLower(field.DBName)
+						createSeqSQL := fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s START 1", sequenceName)
+						if err := m.DB.Exec(createSeqSQL).Error; err != nil {
+							// Ignore "already exists" errors
+							if !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+								return fmt.Errorf("failed to create sequence %s: %v", sequenceName, err)
+							}
+						}
+					}
+				}
+			}
+
+			// Now create the table using the parent method
+			return m.Migrator.CreateTable(value)
+		}); err != nil {
+			return err
+		}
+	}
+	return nil
 }

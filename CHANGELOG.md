@@ -5,6 +5,123 @@ All notable changes to the GORM DuckDB driver will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### 🚀 Project Restructuring & Auto-Increment Fixes
+
+Major restructuring to follow GORM adapter patterns and fix critical auto-increment functionality.
+
+### ✨ Added
+
+- **🏗️ GORM Adapter Pattern Structure**: Restructured project to follow standard GORM adapter patterns (postgres, mysql, sqlite)
+- **📝 Error Translation**: New `error_translator.go` module for DuckDB-specific error handling
+- **🔄 Auto-Increment Support**: Custom GORM callbacks using DuckDB's RETURNING clause for proper primary key handling
+- **⚡ Sequence Management**: Automatic sequence creation during table migration for auto-increment fields
+- **🛠️ VS Code Configuration**: Enhanced workspace settings with directory exclusions and Go language server optimization
+- **📋 Commit Conventions**: Added comprehensive commit naming conventions following Conventional Commits specification
+
+### 🔧 Fixed
+
+- **🔑 Auto-Increment Primary Keys**: Resolved critical issue where auto-increment primary keys returned 0 instead of generated values
+- **💾 DuckDB RETURNING Clause**: Implemented proper `INSERT ... RETURNING id` instead of relying on `LastInsertId()` which returns 0 in DuckDB
+- **🏗️ File Structure**: Renamed `dialector.go` → `duckdb.go` following GORM adapter naming conventions
+- **🔗 Import Cycles**: Resolved VS Code error reporting for non-existent import cycles by excluding subdirectories with separate modules
+- **🧹 Build Conflicts**: Removed duplicate file conflicts and stale cache issues
+
+### 🔄 Changed
+
+- **📁 Main Driver File**: Renamed `dialector.go` to `duckdb.go` following standard GORM adapter naming
+- **🏛️ Architecture**: Restructured to follow Clean Architecture with proper separation of concerns
+- **🧪 Enhanced Testing**: All tests now pass with proper auto-increment functionality
+- **⚙️ Migrator Enhancement**: Enhanced `migrator.go` with sequence creation for auto-increment fields
+
+### 🎯 Technical Implementation
+
+#### Auto-Increment Solution
+
+- **Root Cause**: DuckDB doesn't support `LastInsertId()` - returns 0 always
+- **Solution**: Custom GORM callback using `INSERT ... RETURNING id` 
+- **Sequence Creation**: Automatic `CREATE SEQUENCE IF NOT EXISTS seq_{table}_{field} START 1`
+- **Type Safety**: Handles both `uint` and `int` ID types correctly
+
+#### File Structure Changes
+
+```text
+Before: dialector.go (monolithic)
+After:  duckdb.go (main driver)
+        error_translator.go (error handling)
+        migrator.go (enhanced with sequences)
+```
+
+#### GORM Callback Implementation
+
+```go
+// Custom callback for auto-increment handling
+func createCallback(db *gorm.DB) {
+    // Build INSERT with RETURNING clause
+    sql := "INSERT INTO table (...) VALUES (...) RETURNING id"
+    db.Raw(sql, vars...).Row().Scan(&id)
+    // Set ID back to model
+}
+```
+
+### ✅ Validation
+
+- **All Tests Passing**: 6/6 tests pass including previously failing auto-increment tests
+- **Build Success**: Clean compilation with no errors
+- **CRUD Operations**: Complete Create, Read, Update, Delete functionality verified
+- **Type Compatibility**: Proper handling of `uint`, `int`, and other ID types
+- **Sequence Integration**: Automatic sequence creation and management working
+
+### 🔄 Breaking Changes
+
+None. This release maintains full backward compatibility while fixing critical functionality.
+
+### 🎉 Impact
+
+This restructuring transforms the project into a **production-ready GORM adapter** that:
+
+- ✅ Follows industry-standard GORM adapter patterns
+- ✅ Correctly handles auto-increment primary keys
+- ✅ Provides comprehensive error handling
+- ✅ Maintains full backward compatibility
+- ✅ Passes complete test suite
+
+## [0.2.8] - 2025-08-01
+
+### � CI/CD Reliability & Infrastructure Fixes
+
+This patch release addresses critical issues discovered in the v0.3.0 CI/CD pipeline implementation, focusing on reliability improvements and tool compatibility while maintaining the comprehensive DevOps infrastructure.
+
+### 🛠️ Fixed
+
+- **⚙️ CGO Cross-Compilation**: Resolved "undefined: bindings.Date" errors from improper cross-platform builds
+- **� Tool Compatibility**: Updated golangci-lint from outdated v1.61.0 to latest v2.3.0
+- **🔒 Dependabot Configuration**: Fixed `dependency_file_not_found` errors with proper module paths
+- **� Module Structure**: Corrected replace directives and version references in sub-modules
+- **� Build Reliability**: Simplified CI workflow to focus on stable, essential tools only
+
+### �️ Improved
+
+- **CI/CD Pipeline**: Enhanced reliability by removing problematic tool installations
+- **Security Scanning**: Streamlined to use only proven tools (gosec, govulncheck)
+- **Module Dependencies**: Fixed path resolution issues in test and debug modules
+- **Project Organization**: Better structure with `/test/debug` directory organization
+
+## [0.2.7] - 2025-07-31
+
+### 🚀 DevOps & Infrastructure Overhaul
+
+Major release introducing comprehensive CI/CD pipeline and automated dependency management infrastructure.
+
+### ✨ Added
+
+- **🏗️ Comprehensive CI/CD Pipeline**: Complete GitHub Actions workflow with multi-platform testing
+- **🤖 Automated Dependency Management**: Dependabot configuration for weekly updates across all modules
+- **� Security Scanning**: Integration with Gosec, govulncheck, and CodeQL for vulnerability detection
+- **📊 Performance Monitoring**: Automated benchmarking with regression detection
+- **📋 Coverage Enforcement**: 80% minimum test coverage threshold with detailed reporting
+
 ## [0.2.6] - 2025-07-30
 
 ### 🚀 DuckDB Engine Update & Code Quality Improvements

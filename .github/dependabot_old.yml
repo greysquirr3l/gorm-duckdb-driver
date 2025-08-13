@@ -1,0 +1,106 @@
+---
+# GitHub Dependabot configuration for automated dependency updates
+# https://docs.github.com/en/code-security/dependabot/dependabot-version-updates
+
+version: 2
+updates:
+  # Go modules dependency updates
+  - package-ecosystem: "gomod"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "greysquirr3l"
+    assignees:
+      - "greysquirr3l"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "automated"
+    rebase-strategy: "auto"
+    pull-request-branch-name:
+      separator: "/"
+    target-branch: "main"
+    vendor: true
+    versioning-strategy: "increase"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Example dependencies
+  - package-ecosystem: "gomod"
+    directory: "/example"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "greysquirr3l"
+    assignees:
+      - "greysquirr3l"
+    commit-message:
+      prefix: "example-deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "examples"
+      - "automated"
+
+  # Test debug dependencies
+  - package-ecosystem: "gomod"
+    directory: "/test/debug"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "greysquirr3l"
+    assignees:
+      - "greysquirr3l"
+    commit-message:
+      prefix: "test-debug-deps"
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "testing"
+      - "automated"
+
+  # GitHub Actions workflow dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "07:00"
+      timezone: "Etc/UTC"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "greysquirr3l"
+    assignees:
+      - "greysquirr3l"
+    commit-message:
+      prefix: "ci"
+      include: "scope"
+    labels:
+      - "github-actions"
+      - "ci/cd"
+      - "automated"
+    groups:
+      github-actions:
+        patterns:
+          - "*"

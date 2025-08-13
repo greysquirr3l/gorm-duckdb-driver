@@ -66,3 +66,6 @@ test_types/test_types
 
 # Local
 RELEASE.md
+docs/*
+.github/prompts/*
+backup_original/

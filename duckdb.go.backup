@@ -1,3 +1,6 @@
+// Package duckdb provides a GORM driver for DuckDB database.
+// It implements the gorm.Dialector interface and provides DuckDB-specific functionality
+// including custom migrations, auto-increment support, and array data types.
 package duckdb
 
 import (
@@ -18,12 +21,16 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+const (
+	sqlTypeInteger = "INTEGER"
+)
+
 // Dialector implements gorm.Dialector interface for DuckDB database.
 type Dialector struct {
 	*Config
 }
 
-// Config holds configuration options for the DuckDB dialector.
+// Config contains the configuration options for DuckDB dialector.
 type Config struct {
 	DriverName        string
 	DSN               string
@@ -33,7 +40,7 @@ type Config struct {
 
 // Open creates a new DuckDB dialector with the given DSN.
 func Open(dsn string) gorm.Dialector {
-	return &Dialector{Config: &Config{DSN: dsn}} // Remove DriverName to use default custom driver
+	return &Dialector{Config: &Config{DSN: dsn}}
 }
 
 // New creates a new DuckDB dialector with the given configuration.
@@ -86,16 +93,14 @@ func (c *convertingConn) PrepareContext(ctx context.Context, query string) (driv
 	return c.Prepare(query)
 }
 
-func (c *convertingConn) Exec(query string, args []driver.Value) (driver.Result, error) {
-	// Convert to context-aware version - this is the recommended approach
-	namedArgs := make([]driver.NamedValue, len(args))
-	for i, arg := range args {
-		namedArgs[i] = driver.NamedValue{
-			Ordinal: i + 1,
-			Value:   arg,
-		}
+func (c *convertingConn) Exec(query string, values []driver.Value) (driver.Result, error) {
+	// Convert values to NamedValue
+	namedValues := make([]driver.NamedValue, len(values))
+	for i, v := range values {
+		namedValues[i] = driver.NamedValue{Ordinal: i + 1, Value: v}
 	}
-	return c.ExecContext(context.Background(), query, namedArgs)
+
+	return c.ExecContext(context.Background(), query, namedValues)
 }
 
 func (c *convertingConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -108,19 +113,17 @@ func (c *convertingConn) ExecContext(ctx context.Context, query string, args []d
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return c.Exec(query, values)
+	return c.Conn.(driver.Execer).Exec(query, values)
 }
 
-func (c *convertingConn) Query(query string, args []driver.Value) (driver.Rows, error) {
-	// Convert to context-aware version - this is the recommended approach
-	namedArgs := make([]driver.NamedValue, len(args))
-	for i, arg := range args {
-		namedArgs[i] = driver.NamedValue{
-			Ordinal: i + 1,
-			Value:   arg,
-		}
+func (c *convertingConn) Query(query string, values []driver.Value) (driver.Rows, error) {
+	// Convert values to NamedValue
+	namedValues := make([]driver.NamedValue, len(values))
+	for i, v := range values {
+		namedValues[i] = driver.NamedValue{Ordinal: i + 1, Value: v}
 	}
-	return c.QueryContext(context.Background(), query, namedArgs)
+
+	return c.QueryContext(context.Background(), query, namedValues)
 }
 
 func (c *convertingConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
@@ -133,7 +136,7 @@ func (c *convertingConn) QueryContext(ctx context.Context, query string, args []
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
-	return c.Query(query, values)
+	return c.Conn.(driver.Queryer).Query(query, values)
 }
 
 type convertingStmt struct {
@@ -271,20 +274,16 @@ func (dialector Dialector) Initialize(db *gorm.DB) error {
 	return nil
 }
 
-// Migrator returns a new migrator instance for DuckDB.
+// Migrator returns a DuckDB-specific migrator.
 func (dialector Dialector) Migrator(db *gorm.DB) gorm.Migrator {
-	return Migrator{
-		migrator.Migrator{
-			Config: migrator.Config{
-				DB:                          db,
-				Dialector:                   dialector,
-				CreateIndexAfterCreateTable: true,
-			},
-		},
-	}
+	return Migrator{Migrator: migrator.Migrator{Config: migrator.Config{
+		DB:                          db,
+		Dialector:                   dialector,
+		CreateIndexAfterCreateTable: true,
+	}}}
 }
 
-// DataTypeOf returns the SQL data type for a given field.
+// DataTypeOf returns the SQL data type for the given GORM field.
 func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 	switch field.DataType {
 	case schema.Bool:
@@ -376,58 +375,22 @@ func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression
 	return clause.Expr{}
 }
 
-// BindVarTo writes the bind variable to the clause writer.
-func (dialector Dialector) BindVarTo(writer clause.Writer, _ *gorm.Statement, _ interface{}) {
+// BindVarTo writes bind variables to the writer.
+func (dialector Dialector) BindVarTo(writer clause.Writer, _ *gorm.Statement, v interface{}) {
 	_ = writer.WriteByte('?')
 }
 
 // QuoteTo writes quoted identifiers to the writer.
 func (dialector Dialector) QuoteTo(writer clause.Writer, str string) {
-	var (
-		underQuoted, selfQuoted bool
-		continuousBacktick      int8
-		shiftDelimiter          int8
-	)
-
-	for _, v := range []byte(str) {
-		switch v {
-		case '"':
-			continuousBacktick++
-			if continuousBacktick == 2 {
-				_, _ = writer.WriteString(`""`)
-				continuousBacktick = 0
-			}
-		case '.':
-			if continuousBacktick > 0 || !selfQuoted {
-				shiftDelimiter = 0
-				underQuoted = false
-				continuousBacktick = 0
-				_ = writer.WriteByte('"')
-			}
-			_ = writer.WriteByte(v)
-			continue
-		default:
-			if shiftDelimiter-continuousBacktick <= 0 && !underQuoted {
-				_ = writer.WriteByte('"')
-				underQuoted = true
-				if selfQuoted = continuousBacktick > 0; selfQuoted {
-					continuousBacktick--
-				}
-			}
-
-			for ; continuousBacktick > 0; continuousBacktick-- {
-				_, _ = writer.WriteString(`""`)
-			}
-
-			_ = writer.WriteByte(v)
+	writer.WriteByte('"')
+	for _, char := range str {
+		if char == '"' {
+			writer.WriteString(`""`)
+		} else {
+			writer.WriteRune(char)
 		}
-		shiftDelimiter++
 	}
-
-	if continuousBacktick > 0 && !selfQuoted {
-		_, _ = writer.WriteString(`""`)
-	}
-	_ = writer.WriteByte('"')
+	writer.WriteByte('"')
 }
 
 // Explain returns an explanation of the SQL query.
@@ -470,35 +433,46 @@ func createCallback(db *gorm.DB) {
 		}
 
 		if hasAutoIncrement {
-			// Build custom INSERT with RETURNING
-			sql, vars := buildInsertSQL(db, autoIncrementField)
-			if sql != "" {
-				// Execute with RETURNING to get the auto-generated ID
-				var id int64
-				if err := db.Raw(sql, vars...).Row().Scan(&id); err != nil {
-					if addErr := db.AddError(err); addErr != nil {
+			// Check if this is a batch insert (slice)
+			if db.Statement.ReflectValue.Kind() == reflect.Slice {
+				// For batch inserts with auto-increment, fall back to default GORM behavior
+				// DuckDB doesn't support RETURNING with multiple rows efficiently
+				// Let GORM handle this normally - don't return early
+				callbacks.Create(db)
+				return
+			}
+				// Build custom INSERT with RETURNING for single record
+				sql, vars := buildInsertSQL(db, autoIncrementField)
+				if sql != "" {
+					// Execute with RETURNING to get the auto-generated ID
+					var id int64
+					if err := db.Raw(sql, vars...).Row().Scan(&id); err != nil {
+						if addErr := db.AddError(err); addErr != nil {
+							return
+						}
 						return
 					}
-					return
-				}
 
-				// Set the ID in the model using GORM's ReflectValue
-				if db.Statement.ReflectValue.IsValid() && db.Statement.ReflectValue.CanAddr() {
-					modelValue := db.Statement.ReflectValue
+					// Set the ID in the model using GORM's ReflectValue
+					if db.Statement.ReflectValue.IsValid() && db.Statement.ReflectValue.CanAddr() {
+						modelValue := db.Statement.ReflectValue
 
-					if idField := modelValue.FieldByName(autoIncrementField.Name); idField.IsValid() && idField.CanSet() {
-						// Handle different integer types
-						switch idField.Kind() {
-						case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-							idField.SetUint(uint64(id))
-						case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-							idField.SetInt(id)
+						if idField := modelValue.FieldByName(autoIncrementField.Name); idField.IsValid() && idField.CanSet() {
+							// Handle different integer types
+							switch idField.Kind() {
+							case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+								if id >= 0 {
+									idField.SetUint(uint64(id))
+								}
+							case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+								idField.SetInt(id)
+							}
 						}
 					}
-				}
 
-				db.Statement.RowsAffected = 1
-				return
+					db.Statement.RowsAffected = 1
+					return
+				}
 			}
 		}
 	}
@@ -525,6 +499,14 @@ func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []in
 		return "", nil
 	}
 
+	// Handle batch inserts (slice of structs) - use GORM's default behavior
+	reflectValue := db.Statement.ReflectValue
+	if reflectValue.Kind() == reflect.Slice {
+		// For batch inserts, fall back to GORM's built-in logic
+		// but we need to handle this at the callback level
+		return "", nil
+	}
+
 	fieldCount := len(db.Statement.Schema.Fields)
 	fields := make([]string, 0, fieldCount)
 	placeholders := make([]string, 0, fieldCount)
@@ -536,8 +518,8 @@ func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []in
 			continue // Skip auto-increment field
 		}
 
-		// Get the value for this field
-		fieldValue := db.Statement.ReflectValue.FieldByName(field.Name)
+		// Get the value for this field from the single struct
+		fieldValue := reflectValue.FieldByName(field.Name)
 		if !fieldValue.IsValid() {
 			continue
 		}

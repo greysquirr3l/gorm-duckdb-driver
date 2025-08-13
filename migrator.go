@@ -16,15 +16,18 @@ const (
 	sqlTypeInteger = "INTEGER"
 )
 
+// Migrator implements gorm.Migrator interface for DuckDB database.
 type Migrator struct {
 	migrator.Migrator
 }
 
+// CurrentDatabase returns the current database name.
 func (m Migrator) CurrentDatabase() (name string) {
 	_ = m.DB.Raw("SELECT current_database()").Row().Scan(&name)
 	return
 }
 
+// FullDataTypeOf returns the full data type for a field including constraints.
 // Override FullDataTypeOf to prevent GORM from adding duplicate PRIMARY KEY clauses
 func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 	// Get the base data type from our dialector
@@ -86,14 +89,20 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 	return expr
 }
 
+// AlterColumn modifies a column definition in DuckDB, handling syntax limitations.
 func (m Migrator) AlterColumn(value interface{}, field string) error {
 	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		if stmt.Schema != nil {
 			if field := stmt.Schema.LookUpField(field); field != nil {
-				fileType := m.FullDataTypeOf(field)
+				// For ALTER COLUMN, only use the base data type without defaults
+				baseType := m.Dialector.DataTypeOf(field)
+
+				// Clean the base type - remove any DEFAULT clauses
+				baseType = strings.Split(baseType, " DEFAULT")[0]
+
 				return m.DB.Exec(
 					"ALTER TABLE ? ALTER COLUMN ? TYPE ?",
-					m.CurrentTable(stmt), clause.Column{Name: field.DBName}, fileType,
+					m.CurrentTable(stmt), clause.Column{Name: field.DBName}, clause.Expr{SQL: baseType},
 				).Error
 			}
 		}
@@ -101,6 +110,7 @@ func (m Migrator) AlterColumn(value interface{}, field string) error {
 	})
 }
 
+// RenameColumn renames a column in the database table.
 func (m Migrator) RenameColumn(value interface{}, oldName, newName string) error {
 	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		if stmt.Schema != nil {
@@ -120,8 +130,9 @@ func (m Migrator) RenameColumn(value interface{}, oldName, newName string) error
 	})
 }
 
+// RenameIndex renames an index in the database.
 func (m Migrator) RenameIndex(value interface{}, oldName, newName string) error {
-	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
+	return m.RunWithValue(value, func(_ *gorm.Statement) error {
 		return m.DB.Exec(
 			"ALTER INDEX ? RENAME TO ?",
 			clause.Column{Name: oldName}, clause.Column{Name: newName},
@@ -129,6 +140,7 @@ func (m Migrator) RenameIndex(value interface{}, oldName, newName string) error 
 	})
 }
 
+// DropIndex drops an index from the database.
 func (m Migrator) DropIndex(value interface{}, name string) error {
 	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		if stmt.Schema != nil {
@@ -141,6 +153,7 @@ func (m Migrator) DropIndex(value interface{}, name string) error {
 	})
 }
 
+// DropConstraint drops a constraint from the database.
 func (m Migrator) DropConstraint(value interface{}, name string) error {
 	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		constraint, table := m.GuessConstraintInterfaceAndTable(stmt, name)
@@ -151,6 +164,7 @@ func (m Migrator) DropConstraint(value interface{}, name string) error {
 	})
 }
 
+// HasTable checks if a table exists in the database.
 func (m Migrator) HasTable(value interface{}) bool {
 	var count int64
 
@@ -164,6 +178,7 @@ func (m Migrator) HasTable(value interface{}) bool {
 	return count > 0
 }
 
+// GetTables returns a list of all table names in the database.
 func (m Migrator) GetTables() (tableList []string, err error) {
 	err = m.DB.Raw(
 		"SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'",
@@ -171,6 +186,7 @@ func (m Migrator) GetTables() (tableList []string, err error) {
 	return
 }
 
+// HasColumn checks if a column exists in the database table.
 func (m Migrator) HasColumn(value interface{}, field string) bool {
 	var count int64
 	_ = m.RunWithValue(value, func(stmt *gorm.Statement) error {
@@ -190,6 +206,7 @@ func (m Migrator) HasColumn(value interface{}, field string) bool {
 	return count > 0
 }
 
+// HasIndex checks if an index exists in the database.
 func (m Migrator) HasIndex(value interface{}, name string) bool {
 	var count int64
 	_ = m.RunWithValue(value, func(stmt *gorm.Statement) error {
@@ -208,6 +225,7 @@ func (m Migrator) HasIndex(value interface{}, name string) bool {
 	return count > 0
 }
 
+// HasConstraint checks if a constraint exists in the database.
 func (m Migrator) HasConstraint(value interface{}, name string) bool {
 	var count int64
 	_ = m.RunWithValue(value, func(stmt *gorm.Statement) error {
@@ -225,6 +243,7 @@ func (m Migrator) HasConstraint(value interface{}, name string) bool {
 	return count > 0
 }
 
+// CreateView creates a database view.
 func (m Migrator) CreateView(name string, option gorm.ViewOption) error {
 	if option.Query == nil {
 		return gorm.ErrSubQueryRequired
@@ -249,10 +268,12 @@ func (m Migrator) CreateView(name string, option gorm.ViewOption) error {
 	return m.DB.Exec(m.Explain(sql.String(), m.DB.Statement.Vars...)).Error
 }
 
+// DropView drops a database view.
 func (m Migrator) DropView(name string) error {
 	return m.DB.Exec("DROP VIEW IF EXISTS ?", clause.Table{Name: name}).Error
 }
 
+// GetTypeAliases returns type aliases for the given database type name.
 func (m Migrator) GetTypeAliases(databaseTypeName string) []string {
 	aliases := map[string][]string{
 		"boolean":   {"bool"},
@@ -288,7 +309,7 @@ func (m Migrator) CreateTable(values ...interface{}) error {
 						if err := m.DB.Exec(createSeqSQL).Error; err != nil {
 							// Ignore "already exists" errors
 							if !strings.Contains(strings.ToLower(err.Error()), "already exists") {
-								return fmt.Errorf("failed to create sequence %s: %v", sequenceName, err)
+								return fmt.Errorf("failed to create sequence %s: %w", sequenceName, err)
 							}
 						}
 					}

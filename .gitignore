@@ -69,3 +69,6 @@ RELEASE.md
 docs/*
 .github/prompts/*
 backup_original/
+*.wal
+
+!example/test_*

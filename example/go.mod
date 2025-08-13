@@ -2,14 +2,13 @@ module example
 
 go 1.24
 
-toolchain go1.24.4
-
 require (
-	gorm.io/driver/duckdb v0.2.6
-	gorm.io/gorm v1.25.12
+	github.com/greysquirr3l/gorm-duckdb-driver v0.0.0-00010101000000-000000000000
+	gorm.io/gorm v1.30.1
 )
 
-replace gorm.io/driver/duckdb => ../
+// Replace directive to use the local development version
+replace github.com/greysquirr3l/gorm-duckdb-driver => ../
 
 require (
 	github.com/apache/arrow-go/v18 v18.4.0 // indirect
@@ -29,14 +28,14 @@ require (
 	github.com/klauspost/cpuid/v2 v2.3.0 // indirect
 	github.com/marcboeker/go-duckdb/arrowmapping v0.0.10 // indirect
 	github.com/marcboeker/go-duckdb/mapping v0.0.11 // indirect
-	github.com/marcboeker/go-duckdb/v2 v2.3.3 // indirect
+	github.com/marcboeker/go-duckdb/v2 v2.3.5 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
-	golang.org/x/exp v0.0.0-20250718183923-645b1fa84792 // indirect
-	golang.org/x/mod v0.26.0 // indirect
+	golang.org/x/exp v0.0.0-20250811191247-51f88131bc50 // indirect
+	golang.org/x/mod v0.27.0 // indirect
 	golang.org/x/sync v0.16.0 // indirect
-	golang.org/x/sys v0.34.0 // indirect
-	golang.org/x/text v0.27.0 // indirect
-	golang.org/x/tools v0.35.0 // indirect
+	golang.org/x/sys v0.35.0 // indirect
+	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/tools v0.36.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 )

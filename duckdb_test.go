@@ -23,7 +23,10 @@ type User struct {
 }
 
 func setupTestDB(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(duckdb.Open(":memory:"), &gorm.Config{
+	t.Helper()
+
+	dialector := duckdb.Open(":memory:")
+	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	require.NoError(t, err)

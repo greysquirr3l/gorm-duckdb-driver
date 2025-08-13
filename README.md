@@ -4,14 +4,16 @@ A comprehensive DuckDB driver for [GORM](https://gorm.io), following the same pa
 
 ## Features
 
-- Full GORM compatibility
-- Auto-migration support
+- Full GORM compatibility with custom migrator
+- Auto-migration support with DuckDB-specific optimizations
 - All standard SQL operations (CRUD)
 - Transaction support with savepoints
 - Index management
-- Constraint support
+- Constraint support including foreign keys
 - Comprehensive data type mapping
 - Connection pooling support
+- Auto-increment support with sequences and RETURNING clause
+- Array data type support
 
 ## Quick Start
 
@@ -32,15 +34,25 @@ module your-project
 go 1.24
 
 require (
-    gorm.io/driver/duckdb v1.0.0
-    gorm.io/gorm v1.25.12
+    github.com/greysquirr3l/gorm-duckdb-driver v0.0.0
+    gorm.io/gorm v1.30.1
 )
 
-// Replace directive to use this implementation
-replace gorm.io/driver/duckdb => github.com/greysquirr3l/gorm-duckdb-driver v0.2.6
+// Replace directive required since the driver isn't published yet
+replace github.com/greysquirr3l/gorm-duckdb-driver => github.com/greysquirr3l/gorm-duckdb-driver v0.2.6
 ```
 
-> **📝 Note**: The `replace` directive is necessary because this driver uses the future official module path `gorm.io/driver/duckdb` but is currently hosted at `github.com/greysquirr3l/gorm-duckdb-driver`. This allows for seamless migration once this becomes the official GORM driver.
+### For Local Development
+
+If you're working with a local copy of this driver, use a local replace directive:
+
+```go
+// For local development - replace with your local path
+replace github.com/greysquirr3l/gorm-duckdb-driver => ../../
+
+// For published version - replace with specific version
+replace github.com/greysquirr3l/gorm-duckdb-driver => github.com/greysquirr3l/gorm-duckdb-driver v0.2.6
+```
 
 **Step 3:** Run `go mod tidy` to update dependencies:
 
@@ -52,7 +64,7 @@ go mod tidy
 
 ```go
 import (
-  "github.com/greysquirr3l/gorm-duckdb-driver"
+  duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
   "gorm.io/gorm"
 )
 
@@ -67,6 +79,38 @@ db, err := gorm.Open(duckdb.New(duckdb.Config{
   DSN: "test.db",
   DefaultStringSize: 256,
 }), &gorm.Config{})
+```
+
+## Example Application
+
+This repository includes a comprehensive example application demonstrating all key features:
+
+### Comprehensive Example (`example/`)
+
+A single, comprehensive example that demonstrates:
+
+- **Array Support**: StringArray, FloatArray, IntArray with full CRUD operations
+- **Auto-Increment**: Sequences with RETURNING clause for ID generation  
+- **Migrations**: Schema evolution with DuckDB-specific optimizations
+- **Time Handling**: Time fields with manual control and timezone considerations
+- **Data Types**: Complete mapping of Go types to DuckDB types
+- **ALTER TABLE Fixes**: Demonstrates resolved DuckDB syntax limitations
+- **Advanced Queries**: Aggregations, analytics, and transaction support
+
+```bash
+cd example
+go run main.go
+```
+
+**Features Demonstrated:**
+- ✅ Arrays (StringArray, FloatArray, IntArray)
+- ✅ Migrations and auto-increment with sequences  
+- ✅ Time handling and various data types
+- ✅ ALTER TABLE fixes for DuckDB syntax
+- ✅ Basic CRUD operations
+- ✅ Advanced queries and transactions
+
+> **⚠️ Important:** The example application must be executed using `go run main.go` from within the `example/` directory. It uses an in-memory database for clean demonstration runs.
 ```
 
 ## Data Type Mapping
@@ -177,7 +221,32 @@ db.Exec("UPDATE users SET age = ? WHERE name = ?", 30, "John")
 
 ## Migration Features
 
-The DuckDB driver supports all GORM migration features:
+The DuckDB driver includes a custom migrator that handles DuckDB-specific SQL syntax and provides enhanced functionality:
+
+### Auto-Increment Support
+
+The driver implements auto-increment using DuckDB sequences with the RETURNING clause:
+
+```go
+type User struct {
+    ID   uint   `gorm:"primarykey"`  // Automatically uses sequence + RETURNING
+    Name string `gorm:"size:100;not null"`
+}
+
+// Creates: CREATE SEQUENCE seq_users_id START 1
+// Table:   CREATE TABLE users (id BIGINT DEFAULT nextval('seq_users_id') NOT NULL, ...)
+// Insert:  INSERT INTO users (...) VALUES (...) RETURNING "id"
+```
+
+### DuckDB-Specific ALTER TABLE Handling
+
+The migrator correctly handles DuckDB's ALTER COLUMN syntax limitations:
+
+```go
+// The migrator automatically splits DEFAULT clauses from type changes
+// DuckDB: ALTER TABLE users ALTER COLUMN name TYPE VARCHAR(200)  ✅
+// Not:    ALTER TABLE users ALTER COLUMN name TYPE VARCHAR(200) DEFAULT 'value'  ❌
+```
 
 ### Table Operations
 
@@ -267,7 +336,16 @@ type Config struct {
 
 ## Known Limitations
 
-While this driver provides full GORM compatibility, there are some DuckDB-specific limitations to be aware of:
+While this driver provides full GORM compatibility, there are some DuckDB-specific considerations:
+
+### ALTER TABLE Syntax
+
+**Resolved in Current Version** ✅
+
+Previous versions had issues with ALTER COLUMN statements containing DEFAULT clauses. This has been fixed in the custom migrator:
+
+- **Before:** `ALTER TABLE users ALTER COLUMN name TYPE VARCHAR(200) DEFAULT 'value'` (syntax error)
+- **After:** Split into separate `ALTER COLUMN ... TYPE ...` and default handling operations
 
 ### Migration Schema Validation
 
@@ -364,8 +442,35 @@ This DuckDB driver aims to become an official GORM driver. Contributions are wel
 git clone https://github.com/greysquirr3l/gorm-duckdb-driver.git
 cd gorm-duckdb-driver
 go mod tidy
-go test -v
 ```
+
+### Running the Example
+
+Test the comprehensive example application:
+
+```bash
+# Test all key features in one comprehensive example
+cd example && go run main.go
+```
+
+> **📝 Note:** The example uses an in-memory database (`:memory:`) for clean demonstration runs. All data is cleaned up automatically when the program exits.
+
+### Running Tests
+
+```bash
+# Run all tests
+go test -v
+
+# Run with coverage
+go test -v -cover
+
+# Run specific test
+go test -v -run TestMigration
+```
+
+### Issue Reporting
+
+Please use our [Issue Template](ISSUE_TEMPLATE.md) when reporting bugs. For common issues, check the `bugs/` directory for known workarounds.
 
 ### Submitting to GORM
 
@@ -374,7 +479,12 @@ This driver follows GORM's architecture and coding standards. Once stable and we
 Current status:
 
 - ✅ Full GORM interface implementation
-- ✅ Comprehensive test suite
+- ✅ Custom migrator with DuckDB-specific optimizations
+- ✅ Auto-increment support with sequences and RETURNING clause
+- ✅ ALTER TABLE syntax handling for DuckDB
+- ✅ Comprehensive test suite and example applications
+- ✅ Array data type support
+- ✅ Foreign key constraint support
 - ✅ Documentation and examples
 - 🔄 Community testing phase
 - ⏳ Awaiting official GORM integration

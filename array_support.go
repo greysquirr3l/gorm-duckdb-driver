@@ -7,20 +7,47 @@ import (
 	"strings"
 )
 
+// Helper function to parse array string representation
+func parseArrayString(s string) []string {
+	s = strings.TrimSpace(s)
+
+	// Handle empty array
+	if s == "[]" || s == "" {
+		return []string{}
+	}
+
+	// Remove brackets
+	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
+		s = s[1 : len(s)-1]
+	}
+
+	if strings.TrimSpace(s) == "" {
+		return []string{}
+	}
+
+	parts := strings.Split(s, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		result = append(result, strings.TrimSpace(part))
+	}
+
+	return result
+}
+
 // StringArray represents a DuckDB TEXT[] array type
 type StringArray []string
 
 // Value implements driver.Valuer interface for StringArray
 func (a StringArray) Value() (driver.Value, error) {
 	if a == nil {
-		return nil, nil
+		return "[]", nil
 	}
 
 	if len(a) == 0 {
 		return "[]", nil
 	}
 
-	var elements []string
+	elements := make([]string, 0, len(a))
 	for _, s := range a {
 		// Escape single quotes in strings
 		escaped := strings.ReplaceAll(s, "'", "''")
@@ -111,14 +138,14 @@ type IntArray []int64
 // Value implements driver.Valuer interface for IntArray
 func (a IntArray) Value() (driver.Value, error) {
 	if a == nil {
-		return nil, nil
+		return "[]", nil
 	}
 
 	if len(a) == 0 {
 		return "[]", nil
 	}
 
-	var elements []string
+	elements := make([]string, 0, len(a))
 	for _, i := range a {
 		elements = append(elements, fmt.Sprintf("%d", i))
 	}
@@ -146,32 +173,18 @@ func (a *IntArray) Scan(value interface{}) error {
 }
 
 func (a *IntArray) scanFromString(s string) error {
-	s = strings.TrimSpace(s)
+	parts := parseArrayString(s)
 
-	// Handle empty array
-	if s == "[]" || s == "" {
+	if len(parts) == 0 {
 		*a = IntArray{}
 		return nil
 	}
 
-	// Remove brackets
-	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
-		s = s[1 : len(s)-1]
-	}
-
-	if strings.TrimSpace(s) == "" {
-		*a = IntArray{}
-		return nil
-	}
-
-	parts := strings.Split(s, ",")
 	result := make(IntArray, 0, len(parts))
-
 	for _, part := range parts {
-		part = strings.TrimSpace(part)
 		var i int64
 		if _, err := fmt.Sscanf(part, "%d", &i); err != nil {
-			return fmt.Errorf("cannot parse '%s' as integer: %v", part, err)
+			return fmt.Errorf("cannot parse '%s' as integer: %w", part, err)
 		}
 		result = append(result, i)
 	}
@@ -193,7 +206,7 @@ func (a *IntArray) scanFromSlice(slice []interface{}) error {
 		default:
 			var i int64
 			if _, err := fmt.Sscanf(fmt.Sprintf("%v", item), "%d", &i); err != nil {
-				return fmt.Errorf("cannot convert %T to int64: %v", item, err)
+				return fmt.Errorf("cannot convert %T to int64: %w", item, err)
 			}
 			result = append(result, i)
 		}
@@ -208,14 +221,14 @@ type FloatArray []float64
 // Value implements driver.Valuer interface for FloatArray
 func (a FloatArray) Value() (driver.Value, error) {
 	if a == nil {
-		return nil, nil
+		return "[]", nil
 	}
 
 	if len(a) == 0 {
 		return "[]", nil
 	}
 
-	var elements []string
+	elements := make([]string, 0, len(a))
 	for _, f := range a {
 		elements = append(elements, fmt.Sprintf("%g", f))
 	}
@@ -243,32 +256,18 @@ func (a *FloatArray) Scan(value interface{}) error {
 }
 
 func (a *FloatArray) scanFromString(s string) error {
-	s = strings.TrimSpace(s)
+	parts := parseArrayString(s)
 
-	// Handle empty array
-	if s == "[]" || s == "" {
+	if len(parts) == 0 {
 		*a = FloatArray{}
 		return nil
 	}
 
-	// Remove brackets
-	if strings.HasPrefix(s, "[") && strings.HasSuffix(s, "]") {
-		s = s[1 : len(s)-1]
-	}
-
-	if strings.TrimSpace(s) == "" {
-		*a = FloatArray{}
-		return nil
-	}
-
-	parts := strings.Split(s, ",")
 	result := make(FloatArray, 0, len(parts))
-
 	for _, part := range parts {
-		part = strings.TrimSpace(part)
 		var f float64
 		if _, err := fmt.Sscanf(part, "%g", &f); err != nil {
-			return fmt.Errorf("cannot parse '%s' as float: %v", part, err)
+			return fmt.Errorf("cannot parse '%s' as float: %w", part, err)
 		}
 		result = append(result, f)
 	}
@@ -292,7 +291,7 @@ func (a *FloatArray) scanFromSlice(slice []interface{}) error {
 		default:
 			var f float64
 			if _, err := fmt.Sscanf(fmt.Sprintf("%v", item), "%g", &f); err != nil {
-				return fmt.Errorf("cannot convert %T to float64: %v", item, err)
+				return fmt.Errorf("cannot convert %T to float64: %w", item, err)
 			}
 			result = append(result, f)
 		}

@@ -1,3 +1,5 @@
+// Package duckdb provides a GORM driver for DuckDB database.
+// This file contains minimal array support for basic DuckDB array operations.
 package duckdb
 
 import (
@@ -54,7 +56,7 @@ type ArrayLiteral struct {
 // Value implements driver.Valuer for DuckDB array literals
 func (al ArrayLiteral) Value() (driver.Value, error) {
 	if al.Data == nil {
-		return nil, nil
+		return "[]", nil
 	}
 
 	return formatSliceForDuckDB(al.Data)

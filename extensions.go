@@ -54,8 +54,8 @@ const (
 	// Analytics Extensions
 	ExtensionAutoComplete = "autocomplete"
 	ExtensionFTS          = "fts"
-	ExtensionTPC_H        = "tpch"
-	ExtensionTPC_DS       = "tpcds"
+	ExtensionTPCH         = "tpch"
+	ExtensionTPCDS        = "tpcds"
 
 	// Data Format Extensions
 	ExtensionCSV    = "csv"

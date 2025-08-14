@@ -77,7 +77,10 @@ func (a *StringArray) Scan(value interface{}) error {
 		if err != nil {
 			return fmt.Errorf("cannot scan %T into StringArray", value)
 		}
-		return json.Unmarshal(data, a)
+		if err := json.Unmarshal(data, a); err != nil {
+			return fmt.Errorf("failed to unmarshal JSON data into StringArray: %w", err)
+		}
+		return nil
 	}
 }
 

@@ -91,7 +91,7 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 
 // AlterColumn modifies a column definition in DuckDB, handling syntax limitations.
 func (m Migrator) AlterColumn(value interface{}, field string) error {
-	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
+	err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		if stmt.Schema != nil {
 			if field := stmt.Schema.LookUpField(field); field != nil {
 				// For ALTER COLUMN, only use the base data type without defaults
@@ -108,11 +108,15 @@ func (m Migrator) AlterColumn(value interface{}, field string) error {
 		}
 		return fmt.Errorf("failed to look up field with name: %s", field)
 	})
+	if err != nil {
+		return fmt.Errorf("failed to alter column: %w", err)
+	}
+	return nil
 }
 
 // RenameColumn renames a column in the database table.
 func (m Migrator) RenameColumn(value interface{}, oldName, newName string) error {
-	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
+	err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		if stmt.Schema != nil {
 			if field := stmt.Schema.LookUpField(oldName); field != nil {
 				oldName = field.DBName
@@ -128,21 +132,29 @@ func (m Migrator) RenameColumn(value interface{}, oldName, newName string) error
 			m.CurrentTable(stmt), clause.Column{Name: oldName}, clause.Column{Name: newName},
 		).Error
 	})
+	if err != nil {
+		return fmt.Errorf("failed to rename column: %w", err)
+	}
+	return nil
 }
 
 // RenameIndex renames an index in the database.
 func (m Migrator) RenameIndex(value interface{}, oldName, newName string) error {
-	return m.RunWithValue(value, func(_ *gorm.Statement) error {
+	err := m.RunWithValue(value, func(_ *gorm.Statement) error {
 		return m.DB.Exec(
 			"ALTER INDEX ? RENAME TO ?",
 			clause.Column{Name: oldName}, clause.Column{Name: newName},
 		).Error
 	})
+	if err != nil {
+		return fmt.Errorf("failed to rename index: %w", err)
+	}
+	return nil
 }
 
 // DropIndex drops an index from the database.
 func (m Migrator) DropIndex(value interface{}, name string) error {
-	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
+	err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		if stmt.Schema != nil {
 			if idx := stmt.Schema.LookIndex(name); idx != nil {
 				name = idx.Name
@@ -151,17 +163,25 @@ func (m Migrator) DropIndex(value interface{}, name string) error {
 
 		return m.DB.Exec("DROP INDEX IF EXISTS ?", clause.Column{Name: name}).Error
 	})
+	if err != nil {
+		return fmt.Errorf("failed to drop index: %w", err)
+	}
+	return nil
 }
 
 // DropConstraint drops a constraint from the database.
 func (m Migrator) DropConstraint(value interface{}, name string) error {
-	return m.RunWithValue(value, func(stmt *gorm.Statement) error {
+	err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
 		constraint, table := m.GuessConstraintInterfaceAndTable(stmt, name)
 		if constraint != nil {
 			name = constraint.GetName()
 		}
 		return m.Migrator.DB.Exec("ALTER TABLE ? DROP CONSTRAINT ?", clause.Table{Name: table}, clause.Column{Name: name}).Error
 	})
+	if err != nil {
+		return fmt.Errorf("failed to drop constraint: %w", err)
+	}
+	return nil
 }
 
 // HasTable checks if a table exists in the database.
@@ -319,7 +339,7 @@ func (m Migrator) CreateTable(values ...interface{}) error {
 			// Now create the table using the parent method
 			return m.Migrator.CreateTable(value)
 		}); err != nil {
-			return err
+			return fmt.Errorf("failed to create table: %w", err)
 		}
 	}
 	return nil

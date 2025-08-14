@@ -58,7 +58,7 @@ type convertingDriver struct {
 func (d *convertingDriver) Open(name string) (driver.Conn, error) {
 	conn, err := d.Driver.Open(name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to open database connection: %w", err)
 	}
 	return &convertingConn{conn}, nil
 }
@@ -70,7 +70,7 @@ type convertingConn struct {
 func (c *convertingConn) Prepare(query string) (driver.Stmt, error) {
 	stmt, err := c.Conn.Prepare(query)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to prepare statement: %w", err)
 	}
 	return &convertingStmt{stmt}, nil
 }
@@ -79,7 +79,7 @@ func (c *convertingConn) PrepareContext(ctx context.Context, query string) (driv
 	if prepCtx, ok := c.Conn.(driver.ConnPrepareContext); ok {
 		stmt, err := prepCtx.PrepareContext(ctx, query)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to prepare statement with context: %w", err)
 		}
 		return &convertingStmt{stmt}, nil
 	}
@@ -101,14 +101,22 @@ func (c *convertingConn) Exec(query string, args []driver.Value) (driver.Result,
 func (c *convertingConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
 	if execCtx, ok := c.Conn.(driver.ExecerContext); ok {
 		convertedArgs := convertNamedValues(args)
-		return execCtx.ExecContext(ctx, query, convertedArgs)
+		result, err := execCtx.ExecContext(ctx, query, convertedArgs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute query with context: %w", err)
+		}
+		return result, nil
 	}
 	// Fallback to non-context version
-	values := make([]driver.Value, len(args))
+	namedArgs := make([]driver.NamedValue, len(args))
 	for i, arg := range args {
-		values[i] = arg.Value
+		namedArgs[i] = driver.NamedValue{
+			Ordinal: i + 1,
+			Value:   arg.Value,
+		}
 	}
-	return c.Exec(query, values)
+	//nolint:contextcheck // Using Background context for fallback when no context is available
+	return c.ExecContext(context.Background(), query, namedArgs)
 }
 
 func (c *convertingConn) Query(query string, args []driver.Value) (driver.Rows, error) {
@@ -126,14 +134,22 @@ func (c *convertingConn) Query(query string, args []driver.Value) (driver.Rows, 
 func (c *convertingConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	if queryCtx, ok := c.Conn.(driver.QueryerContext); ok {
 		convertedArgs := convertNamedValues(args)
-		return queryCtx.QueryContext(ctx, query, convertedArgs)
+		rows, err := queryCtx.QueryContext(ctx, query, convertedArgs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute query with context: %w", err)
+		}
+		return rows, nil
 	}
 	// Fallback to non-context version
-	values := make([]driver.Value, len(args))
+	namedArgs := make([]driver.NamedValue, len(args))
 	for i, arg := range args {
-		values[i] = arg.Value
+		namedArgs[i] = driver.NamedValue{
+			Ordinal: i + 1,
+			Value:   arg,
+		}
 	}
-	return c.Query(query, values)
+	//nolint:contextcheck // Using Background context for fallback when no context is available
+	return c.QueryContext(context.Background(), query, namedArgs)
 }
 
 type convertingStmt struct {
@@ -167,7 +183,11 @@ func (s *convertingStmt) Query(args []driver.Value) (driver.Rows, error) {
 func (s *convertingStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) {
 	if stmtCtx, ok := s.Stmt.(driver.StmtExecContext); ok {
 		convertedArgs := convertNamedValues(args)
-		return stmtCtx.ExecContext(ctx, convertedArgs)
+		result, err := stmtCtx.ExecContext(ctx, convertedArgs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute statement with context: %w", err)
+		}
+		return result, nil
 	}
 	// Direct fallback without using deprecated methods
 	convertedArgs := convertNamedValues(args)
@@ -176,13 +196,21 @@ func (s *convertingStmt) ExecContext(ctx context.Context, args []driver.NamedVal
 		values[i] = arg.Value
 	}
 	//nolint:staticcheck // Fallback required for drivers that don't implement StmtExecContext
-	return s.Stmt.Exec(values)
+	result, err := s.Stmt.Exec(values)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute statement: %w", err)
+	}
+	return result, nil
 }
 
 func (s *convertingStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) {
 	if stmtCtx, ok := s.Stmt.(driver.StmtQueryContext); ok {
 		convertedArgs := convertNamedValues(args)
-		return stmtCtx.QueryContext(ctx, convertedArgs)
+		rows, err := stmtCtx.QueryContext(ctx, convertedArgs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to query statement with context: %w", err)
+		}
+		return rows, nil
 	}
 	// Direct fallback without using deprecated methods
 	convertedArgs := convertNamedValues(args)
@@ -191,7 +219,11 @@ func (s *convertingStmt) QueryContext(ctx context.Context, args []driver.NamedVa
 		values[i] = arg.Value
 	}
 	//nolint:staticcheck // Fallback required for drivers that don't implement StmtQueryContext
-	return s.Stmt.Query(values)
+	rows, err := s.Stmt.Query(values)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query statement: %w", err)
+	}
+	return rows, nil
 }
 
 // Convert driver.NamedValue slice
@@ -244,10 +276,10 @@ func (dialector Dialector) Initialize(db *gorm.DB) error {
 
 	// Override the create callback to use RETURNING for auto-increment fields
 	if err := db.Callback().Create().Before("gorm:create").Register("duckdb:before_create", beforeCreateCallback); err != nil {
-		return err
+		return fmt.Errorf("failed to register before create callback: %w", err)
 	}
 	if err := db.Callback().Create().Replace("gorm:create", createCallback); err != nil {
-		return err
+		return fmt.Errorf("failed to replace create callback: %w", err)
 	}
 
 	if dialector.DefaultStringSize == 0 {
@@ -263,7 +295,7 @@ func (dialector Dialector) Initialize(db *gorm.DB) error {
 	} else {
 		connPool, err := sql.Open(dialector.DriverName, dialector.DSN)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to open database connection: %w", err)
 		}
 		db.ConnPool = connPool
 	}
@@ -490,7 +522,9 @@ func createCallback(db *gorm.DB) {
 						// Handle different integer types
 						switch idField.Kind() {
 						case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-							idField.SetUint(uint64(id))
+							if id >= 0 {
+								idField.SetUint(uint64(id))
+							}
 						case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 							idField.SetInt(id)
 						}

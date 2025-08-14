@@ -1,0 +1,40 @@
+# CODEOWNERS for GORM DuckDB Driver
+# This file defines who is responsible for code in this repository.
+# Each line is a file pattern followed by one or more owners.
+
+# Global ownership - all files by default
+* @greysquirr3l
+
+# Core driver files - require core maintainer review
+*.go @greysquirr3l
+duckdb.go @greysquirr3l
+migrator.go @greysquirr3l
+error_translator.go @greysquirr3l
+extensions.go @greysquirr3l
+array_*.go @greysquirr3l
+
+# Test files - require test coverage validation
+*_test.go @greysquirr3l
+/test/ @greysquirr3l
+/example/ @greysquirr3l
+
+# Documentation - require documentation review
+README.md @greysquirr3l
+CHANGELOG.md @greysquirr3l
+CONTRIBUTING.md @greysquirr3l
+ANALYSIS_SUMMARY.md @greysquirr3l
+/docs/ @greysquirr3l
+
+# Security and CI/CD files - require security review
+.github/ @greysquirr3l
+.gitignore @greysquirr3l
+go.mod @greysquirr3l
+go.sum @greysquirr3l
+SECURITY.md @greysquirr3l
+
+# Release and version management
+RELEASE*.md @greysquirr3l
+VERSION @greysquirr3l
+
+# License and legal
+LICENSE @greysquirr3l

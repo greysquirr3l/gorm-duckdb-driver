@@ -66,9 +66,13 @@ test_types/test_types
 
 # Local
 RELEASE.md
-docs/*
 .github/prompts/*
 backup_original/
 *.wal
 
+# Documentation - include docs/ but ignore dev subdirectory
+!/docs
+docs/dev/
+
 !example/test_*
+.mcp/*

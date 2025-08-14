@@ -411,17 +411,12 @@ func (d *extensionAwareDialector) Initialize(db *gorm.DB) error {
 		return err
 	}
 
-	// Create and store extension manager
+	// Create extension manager but don't preload yet
 	if d.extensionConfig != nil {
 		d.manager = NewExtensionManager(db, d.extensionConfig)
 
-		// Store manager in db instance for later retrieval
-		db.InstanceSet("duckdb:extension_manager", d.manager)
-
-		// Preload configured extensions
-		if err := d.manager.PreloadExtensions(); err != nil {
-			return fmt.Errorf("failed to preload extensions: %w", err)
-		}
+		// We'll preload extensions lazily when first accessed
+		// or provide a separate method to trigger preloading
 	}
 
 	return nil
@@ -431,12 +426,24 @@ func (d *extensionAwareDialector) Initialize(db *gorm.DB) error {
 
 // GetExtensionManager retrieves the extension manager from a database instance
 func GetExtensionManager(db *gorm.DB) (*ExtensionManager, error) {
-	if value, ok := db.InstanceGet("duckdb:extension_manager"); ok {
-		if manager, ok := value.(*ExtensionManager); ok {
-			return manager, nil
+	// Use type assertion on the dialector to get the extension manager
+	if extensionDialector, ok := db.Dialector.(*extensionAwareDialector); ok {
+		if extensionDialector.manager != nil {
+			return extensionDialector.manager, nil
 		}
+		return nil, fmt.Errorf("extension manager not initialized - check extension configuration")
 	}
 	return nil, fmt.Errorf("extension manager not found - use NewWithExtensions or OpenWithExtensions")
+}
+
+// InitializeExtensions manually triggers preloading of configured extensions
+// This should be called after the database connection is fully established
+func InitializeExtensions(db *gorm.DB) error {
+	manager, err := GetExtensionManager(db)
+	if err != nil {
+		return err
+	}
+	return manager.PreloadExtensions()
 }
 
 // MustGetExtensionManager retrieves the extension manager, panics if not found

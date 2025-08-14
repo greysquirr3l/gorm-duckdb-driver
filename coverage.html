@@ -59,13 +59,13 @@
 				
 				<option value="file1">github.com/greysquirr3l/gorm-duckdb-driver/array_support.go (0.0%)</option>
 				
-				<option value="file2">github.com/greysquirr3l/gorm-duckdb-driver/duckdb.go (44.1%)</option>
+				<option value="file2">github.com/greysquirr3l/gorm-duckdb-driver/duckdb.go (42.2%)</option>
 				
 				<option value="file3">github.com/greysquirr3l/gorm-duckdb-driver/error_translator.go (0.0%)</option>
 				
 				<option value="file4">github.com/greysquirr3l/gorm-duckdb-driver/extensions.go (0.0%)</option>
 				
-				<option value="file5">github.com/greysquirr3l/gorm-duckdb-driver/migrator.go (24.1%)</option>
+				<option value="file5">github.com/greysquirr3l/gorm-duckdb-driver/migrator.go (21.3%)</option>
 				
 				</select>
 			</div>
@@ -79,7 +79,9 @@
 		</div>
 		<div id="content">
 		
-		<pre class="file" id="file0" style="display: none">package duckdb
+		<pre class="file" id="file0" style="display: none">// Package duckdb provides a GORM driver for DuckDB database.
+// This file contains minimal array support for basic DuckDB array operations.
+package duckdb
 
 import (
         "database/sql/driver"
@@ -135,7 +137,7 @@ type ArrayLiteral struct {
 // Value implements driver.Valuer for DuckDB array literals
 func (al ArrayLiteral) Value() (driver.Value, error) <span class="cov0" title="0">{
         if al.Data == nil </span><span class="cov0" title="0">{
-                return nil, nil
+                return "[]", nil
         }</span>
 
         <span class="cov0" title="0">return formatSliceForDuckDB(al.Data)</span>
@@ -303,20 +305,47 @@ import (
         "strings"
 )
 
+// Helper function to parse array string representation
+func parseArrayString(s string) []string <span class="cov0" title="0">{
+        s = strings.TrimSpace(s)
+
+        // Handle empty array
+        if s == "[]" || s == "" </span><span class="cov0" title="0">{
+                return []string{}
+        }</span>
+
+        // Remove brackets
+        <span class="cov0" title="0">if strings.HasPrefix(s, "[") &amp;&amp; strings.HasSuffix(s, "]") </span><span class="cov0" title="0">{
+                s = s[1 : len(s)-1]
+        }</span>
+
+        <span class="cov0" title="0">if strings.TrimSpace(s) == "" </span><span class="cov0" title="0">{
+                return []string{}
+        }</span>
+
+        <span class="cov0" title="0">parts := strings.Split(s, ",")
+        result := make([]string, 0, len(parts))
+        for _, part := range parts </span><span class="cov0" title="0">{
+                result = append(result, strings.TrimSpace(part))
+        }</span>
+
+        <span class="cov0" title="0">return result</span>
+}
+
 // StringArray represents a DuckDB TEXT[] array type
 type StringArray []string
 
 // Value implements driver.Valuer interface for StringArray
 func (a StringArray) Value() (driver.Value, error) <span class="cov0" title="0">{
         if a == nil </span><span class="cov0" title="0">{
-                return nil, nil
+                return "[]", nil
         }</span>
 
         <span class="cov0" title="0">if len(a) == 0 </span><span class="cov0" title="0">{
                 return "[]", nil
         }</span>
 
-        <span class="cov0" title="0">var elements []string
+        <span class="cov0" title="0">elements := make([]string, 0, len(a))
         for _, s := range a </span><span class="cov0" title="0">{
                 // Escape single quotes in strings
                 escaped := strings.ReplaceAll(s, "'", "''")
@@ -346,7 +375,10 @@ func (a *StringArray) Scan(value interface{}) error <span class="cov0" title="0"
                 if err != nil </span><span class="cov0" title="0">{
                         return fmt.Errorf("cannot scan %T into StringArray", value)
                 }</span>
-                <span class="cov0" title="0">return json.Unmarshal(data, a)</span>
+                <span class="cov0" title="0">if err := json.Unmarshal(data, a); err != nil </span><span class="cov0" title="0">{
+                        return fmt.Errorf("failed to unmarshal JSON data into StringArray: %w", err)
+                }</span>
+                <span class="cov0" title="0">return nil</span>
         }
 }
 
@@ -407,14 +439,14 @@ type IntArray []int64
 // Value implements driver.Valuer interface for IntArray
 func (a IntArray) Value() (driver.Value, error) <span class="cov0" title="0">{
         if a == nil </span><span class="cov0" title="0">{
-                return nil, nil
+                return "[]", nil
         }</span>
 
         <span class="cov0" title="0">if len(a) == 0 </span><span class="cov0" title="0">{
                 return "[]", nil
         }</span>
 
-        <span class="cov0" title="0">var elements []string
+        <span class="cov0" title="0">elements := make([]string, 0, len(a))
         for _, i := range a </span><span class="cov0" title="0">{
                 elements = append(elements, fmt.Sprintf("%d", i))
         }</span>
@@ -442,32 +474,18 @@ func (a *IntArray) Scan(value interface{}) error <span class="cov0" title="0">{
 }
 
 func (a *IntArray) scanFromString(s string) error <span class="cov0" title="0">{
-        s = strings.TrimSpace(s)
+        parts := parseArrayString(s)
 
-        // Handle empty array
-        if s == "[]" || s == "" </span><span class="cov0" title="0">{
+        if len(parts) == 0 </span><span class="cov0" title="0">{
                 *a = IntArray{}
                 return nil
         }</span>
 
-        // Remove brackets
-        <span class="cov0" title="0">if strings.HasPrefix(s, "[") &amp;&amp; strings.HasSuffix(s, "]") </span><span class="cov0" title="0">{
-                s = s[1 : len(s)-1]
-        }</span>
-
-        <span class="cov0" title="0">if strings.TrimSpace(s) == "" </span><span class="cov0" title="0">{
-                *a = IntArray{}
-                return nil
-        }</span>
-
-        <span class="cov0" title="0">parts := strings.Split(s, ",")
-        result := make(IntArray, 0, len(parts))
-
+        <span class="cov0" title="0">result := make(IntArray, 0, len(parts))
         for _, part := range parts </span><span class="cov0" title="0">{
-                part = strings.TrimSpace(part)
                 var i int64
                 if _, err := fmt.Sscanf(part, "%d", &amp;i); err != nil </span><span class="cov0" title="0">{
-                        return fmt.Errorf("cannot parse '%s' as integer: %v", part, err)
+                        return fmt.Errorf("cannot parse '%s' as integer: %w", part, err)
                 }</span>
                 <span class="cov0" title="0">result = append(result, i)</span>
         }
@@ -489,7 +507,7 @@ func (a *IntArray) scanFromSlice(slice []interface{}) error <span class="cov0" t
                 default:<span class="cov0" title="0">
                         var i int64
                         if _, err := fmt.Sscanf(fmt.Sprintf("%v", item), "%d", &amp;i); err != nil </span><span class="cov0" title="0">{
-                                return fmt.Errorf("cannot convert %T to int64: %v", item, err)
+                                return fmt.Errorf("cannot convert %T to int64: %w", item, err)
                         }</span>
                         <span class="cov0" title="0">result = append(result, i)</span>
                 }
@@ -504,14 +522,14 @@ type FloatArray []float64
 // Value implements driver.Valuer interface for FloatArray
 func (a FloatArray) Value() (driver.Value, error) <span class="cov0" title="0">{
         if a == nil </span><span class="cov0" title="0">{
-                return nil, nil
+                return "[]", nil
         }</span>
 
         <span class="cov0" title="0">if len(a) == 0 </span><span class="cov0" title="0">{
                 return "[]", nil
         }</span>
 
-        <span class="cov0" title="0">var elements []string
+        <span class="cov0" title="0">elements := make([]string, 0, len(a))
         for _, f := range a </span><span class="cov0" title="0">{
                 elements = append(elements, fmt.Sprintf("%g", f))
         }</span>
@@ -539,32 +557,18 @@ func (a *FloatArray) Scan(value interface{}) error <span class="cov0" title="0">
 }
 
 func (a *FloatArray) scanFromString(s string) error <span class="cov0" title="0">{
-        s = strings.TrimSpace(s)
+        parts := parseArrayString(s)
 
-        // Handle empty array
-        if s == "[]" || s == "" </span><span class="cov0" title="0">{
+        if len(parts) == 0 </span><span class="cov0" title="0">{
                 *a = FloatArray{}
                 return nil
         }</span>
 
-        // Remove brackets
-        <span class="cov0" title="0">if strings.HasPrefix(s, "[") &amp;&amp; strings.HasSuffix(s, "]") </span><span class="cov0" title="0">{
-                s = s[1 : len(s)-1]
-        }</span>
-
-        <span class="cov0" title="0">if strings.TrimSpace(s) == "" </span><span class="cov0" title="0">{
-                *a = FloatArray{}
-                return nil
-        }</span>
-
-        <span class="cov0" title="0">parts := strings.Split(s, ",")
-        result := make(FloatArray, 0, len(parts))
-
+        <span class="cov0" title="0">result := make(FloatArray, 0, len(parts))
         for _, part := range parts </span><span class="cov0" title="0">{
-                part = strings.TrimSpace(part)
                 var f float64
                 if _, err := fmt.Sscanf(part, "%g", &amp;f); err != nil </span><span class="cov0" title="0">{
-                        return fmt.Errorf("cannot parse '%s' as float: %v", part, err)
+                        return fmt.Errorf("cannot parse '%s' as float: %w", part, err)
                 }</span>
                 <span class="cov0" title="0">result = append(result, f)</span>
         }
@@ -588,7 +592,7 @@ func (a *FloatArray) scanFromSlice(slice []interface{}) error <span class="cov0"
                 default:<span class="cov0" title="0">
                         var f float64
                         if _, err := fmt.Sscanf(fmt.Sprintf("%v", item), "%g", &amp;f); err != nil </span><span class="cov0" title="0">{
-                                return fmt.Errorf("cannot convert %T to float64: %v", item, err)
+                                return fmt.Errorf("cannot convert %T to float64: %w", item, err)
                         }</span>
                         <span class="cov0" title="0">result = append(result, f)</span>
                 }
@@ -633,10 +637,12 @@ import (
         "gorm.io/gorm/schema"
 )
 
+// Dialector implements gorm.Dialector interface for DuckDB database.
 type Dialector struct {
         *Config
 }
 
+// Config holds configuration options for the DuckDB dialector.
 type Config struct {
         DriverName        string
         DSN               string
@@ -644,14 +650,17 @@ type Config struct {
         DefaultStringSize uint
 }
 
+// Open creates a new DuckDB dialector with the given DSN.
 func Open(dsn string) gorm.Dialector <span class="cov8" title="1">{
         return &amp;Dialector{Config: &amp;Config{DSN: dsn}} // Remove DriverName to use default custom driver
 }</span>
 
+// New creates a new DuckDB dialector with the given configuration.
 func New(config Config) gorm.Dialector <span class="cov0" title="0">{
         return &amp;Dialector{Config: &amp;config}
 }</span>
 
+// Name returns the name of the dialector.
 func (dialector Dialector) Name() string <span class="cov8" title="1">{
         return "duckdb"
 }</span>
@@ -668,7 +677,7 @@ type convertingDriver struct {
 func (d *convertingDriver) Open(name string) (driver.Conn, error) <span class="cov8" title="1">{
         conn, err := d.Driver.Open(name)
         if err != nil </span><span class="cov0" title="0">{
-                return nil, err
+                return nil, fmt.Errorf("failed to open database connection: %w", err)
         }</span>
         <span class="cov8" title="1">return &amp;convertingConn{conn}, nil</span>
 }
@@ -680,7 +689,7 @@ type convertingConn struct {
 func (c *convertingConn) Prepare(query string) (driver.Stmt, error) <span class="cov0" title="0">{
         stmt, err := c.Conn.Prepare(query)
         if err != nil </span><span class="cov0" title="0">{
-                return nil, err
+                return nil, fmt.Errorf("failed to prepare statement: %w", err)
         }</span>
         <span class="cov0" title="0">return &amp;convertingStmt{stmt}, nil</span>
 }
@@ -689,7 +698,7 @@ func (c *convertingConn) PrepareContext(ctx context.Context, query string) (driv
         if prepCtx, ok := c.Conn.(driver.ConnPrepareContext); ok </span><span class="cov0" title="0">{
                 stmt, err := prepCtx.PrepareContext(ctx, query)
                 if err != nil </span><span class="cov0" title="0">{
-                        return nil, err
+                        return nil, fmt.Errorf("failed to prepare statement with context: %w", err)
                 }</span>
                 <span class="cov0" title="0">return &amp;convertingStmt{stmt}, nil</span>
         }
@@ -711,14 +720,22 @@ func (c *convertingConn) Exec(query string, args []driver.Value) (driver.Result,
 func (c *convertingConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) <span class="cov8" title="1">{
         if execCtx, ok := c.Conn.(driver.ExecerContext); ok </span><span class="cov8" title="1">{
                 convertedArgs := convertNamedValues(args)
-                return execCtx.ExecContext(ctx, query, convertedArgs)
-        }</span>
+                result, err := execCtx.ExecContext(ctx, query, convertedArgs)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to execute query with context: %w", err)
+                }</span>
+                <span class="cov8" title="1">return result, nil</span>
+        }
         // Fallback to non-context version
-        <span class="cov0" title="0">values := make([]driver.Value, len(args))
+        <span class="cov0" title="0">namedArgs := make([]driver.NamedValue, len(args))
         for i, arg := range args </span><span class="cov0" title="0">{
-                values[i] = arg.Value
+                namedArgs[i] = driver.NamedValue{
+                        Ordinal: i + 1,
+                        Value:   arg.Value,
+                }
         }</span>
-        <span class="cov0" title="0">return c.Exec(query, values)</span>
+        //nolint:contextcheck // Using Background context for fallback when no context is available
+        <span class="cov0" title="0">return c.ExecContext(context.Background(), query, namedArgs)</span>
 }
 
 func (c *convertingConn) Query(query string, args []driver.Value) (driver.Rows, error) <span class="cov0" title="0">{
@@ -736,14 +753,22 @@ func (c *convertingConn) Query(query string, args []driver.Value) (driver.Rows, 
 func (c *convertingConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) <span class="cov8" title="1">{
         if queryCtx, ok := c.Conn.(driver.QueryerContext); ok </span><span class="cov8" title="1">{
                 convertedArgs := convertNamedValues(args)
-                return queryCtx.QueryContext(ctx, query, convertedArgs)
-        }</span>
+                rows, err := queryCtx.QueryContext(ctx, query, convertedArgs)
+                if err != nil </span><span class="cov8" title="1">{
+                        return nil, fmt.Errorf("failed to execute query with context: %w", err)
+                }</span>
+                <span class="cov8" title="1">return rows, nil</span>
+        }
         // Fallback to non-context version
-        <span class="cov0" title="0">values := make([]driver.Value, len(args))
+        <span class="cov0" title="0">namedArgs := make([]driver.NamedValue, len(args))
         for i, arg := range args </span><span class="cov0" title="0">{
-                values[i] = arg.Value
+                namedArgs[i] = driver.NamedValue{
+                        Ordinal: i + 1,
+                        Value:   arg,
+                }
         }</span>
-        <span class="cov0" title="0">return c.Query(query, values)</span>
+        //nolint:contextcheck // Using Background context for fallback when no context is available
+        <span class="cov0" title="0">return c.QueryContext(context.Background(), query, namedArgs)</span>
 }
 
 type convertingStmt struct {
@@ -777,8 +802,12 @@ func (s *convertingStmt) Query(args []driver.Value) (driver.Rows, error) <span c
 func (s *convertingStmt) ExecContext(ctx context.Context, args []driver.NamedValue) (driver.Result, error) <span class="cov0" title="0">{
         if stmtCtx, ok := s.Stmt.(driver.StmtExecContext); ok </span><span class="cov0" title="0">{
                 convertedArgs := convertNamedValues(args)
-                return stmtCtx.ExecContext(ctx, convertedArgs)
-        }</span>
+                result, err := stmtCtx.ExecContext(ctx, convertedArgs)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to execute statement with context: %w", err)
+                }</span>
+                <span class="cov0" title="0">return result, nil</span>
+        }
         // Direct fallback without using deprecated methods
         <span class="cov0" title="0">convertedArgs := convertNamedValues(args)
         values := make([]driver.Value, len(convertedArgs))
@@ -786,14 +815,22 @@ func (s *convertingStmt) ExecContext(ctx context.Context, args []driver.NamedVal
                 values[i] = arg.Value
         }</span>
         //nolint:staticcheck // Fallback required for drivers that don't implement StmtExecContext
-        <span class="cov0" title="0">return s.Stmt.Exec(values)</span>
+        <span class="cov0" title="0">result, err := s.Stmt.Exec(values)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to execute statement: %w", err)
+        }</span>
+        <span class="cov0" title="0">return result, nil</span>
 }
 
 func (s *convertingStmt) QueryContext(ctx context.Context, args []driver.NamedValue) (driver.Rows, error) <span class="cov0" title="0">{
         if stmtCtx, ok := s.Stmt.(driver.StmtQueryContext); ok </span><span class="cov0" title="0">{
                 convertedArgs := convertNamedValues(args)
-                return stmtCtx.QueryContext(ctx, convertedArgs)
-        }</span>
+                rows, err := stmtCtx.QueryContext(ctx, convertedArgs)
+                if err != nil </span><span class="cov0" title="0">{
+                        return nil, fmt.Errorf("failed to query statement with context: %w", err)
+                }</span>
+                <span class="cov0" title="0">return rows, nil</span>
+        }
         // Direct fallback without using deprecated methods
         <span class="cov0" title="0">convertedArgs := convertNamedValues(args)
         values := make([]driver.Value, len(convertedArgs))
@@ -801,7 +838,11 @@ func (s *convertingStmt) QueryContext(ctx context.Context, args []driver.NamedVa
                 values[i] = arg.Value
         }</span>
         //nolint:staticcheck // Fallback required for drivers that don't implement StmtQueryContext
-        <span class="cov0" title="0">return s.Stmt.Query(values)</span>
+        <span class="cov0" title="0">rows, err := s.Stmt.Query(values)
+        if err != nil </span><span class="cov0" title="0">{
+                return nil, fmt.Errorf("failed to query statement: %w", err)
+        }</span>
+        <span class="cov0" title="0">return rows, nil</span>
 }
 
 // Convert driver.NamedValue slice
@@ -853,10 +894,14 @@ func (dialector Dialector) Initialize(db *gorm.DB) error <span class="cov8" titl
         callbacks.RegisterDefaultCallbacks(db, &amp;callbacks.Config{})
 
         // Override the create callback to use RETURNING for auto-increment fields
-        db.Callback().Create().Before("gorm:create").Register("duckdb:before_create", beforeCreateCallback)
-        db.Callback().Create().Replace("gorm:create", createCallback)
+        if err := db.Callback().Create().Before("gorm:create").Register("duckdb:before_create", beforeCreateCallback); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to register before create callback: %w", err)
+        }</span>
+        <span class="cov8" title="1">if err := db.Callback().Create().Replace("gorm:create", createCallback); err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to replace create callback: %w", err)
+        }</span>
 
-        if dialector.DefaultStringSize == 0 </span><span class="cov8" title="1">{
+        <span class="cov8" title="1">if dialector.DefaultStringSize == 0 </span><span class="cov8" title="1">{
                 dialector.DefaultStringSize = 256
         }</span>
 
@@ -869,7 +914,7 @@ func (dialector Dialector) Initialize(db *gorm.DB) error <span class="cov8" titl
         }</span> else<span class="cov8" title="1"> {
                 connPool, err := sql.Open(dialector.DriverName, dialector.DSN)
                 if err != nil </span><span class="cov0" title="0">{
-                        return err
+                        return fmt.Errorf("failed to open database connection: %w", err)
                 }</span>
                 <span class="cov8" title="1">db.ConnPool = connPool</span>
         }
@@ -877,6 +922,7 @@ func (dialector Dialector) Initialize(db *gorm.DB) error <span class="cov8" titl
         <span class="cov8" title="1">return nil</span>
 }
 
+// Migrator returns a new migrator instance for DuckDB.
 func (dialector Dialector) Migrator(db *gorm.DB) gorm.Migrator <span class="cov8" title="1">{
         return Migrator{
                 migrator.Migrator{
@@ -889,6 +935,7 @@ func (dialector Dialector) Migrator(db *gorm.DB) gorm.Migrator <span class="cov8
         }
 }</span>
 
+// DataTypeOf returns the SQL data type for a given field.
 func (dialector Dialector) DataTypeOf(field *schema.Field) string <span class="cov8" title="1">{
         switch field.DataType </span>{
         case schema.Bool:<span class="cov0" title="0">
@@ -900,14 +947,14 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string <span class="c
                 case 16:<span class="cov0" title="0">
                         return "SMALLINT"</span>
                 case 32:<span class="cov0" title="0">
-                        return "INTEGER"</span>
+                        return sqlTypeInteger</span>
                 default:<span class="cov0" title="0">
                         return "BIGINT"</span>
                 }
         case schema.Uint:<span class="cov8" title="1">
                 // For primary keys, use INTEGER to enable auto-increment in DuckDB
                 if field.PrimaryKey </span><span class="cov8" title="1">{
-                        return "INTEGER"
+                        return sqlTypeInteger
                 }</span>
                 // Use signed integers for uint to ensure foreign key compatibility
                 // DuckDB has issues with foreign keys between signed and unsigned types
@@ -917,7 +964,7 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string <span class="c
                 case 16:<span class="cov0" title="0">
                         return "SMALLINT"</span>
                 case 32:<span class="cov0" title="0">
-                        return "INTEGER"</span>
+                        return sqlTypeInteger</span>
                 default:<span class="cov0" title="0">
                         return "BIGINT"</span>
                 }
@@ -954,6 +1001,7 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string <span class="c
         <span class="cov0" title="0">return string(field.DataType)</span>
 }
 
+// DefaultValueOf returns the default value clause for a field.
 func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression <span class="cov0" title="0">{
         if field.HasDefaultValue &amp;&amp; (field.DefaultValueInterface != nil || field.DefaultValue != "") </span><span class="cov0" title="0">{
                 if field.DefaultValueInterface != nil </span><span class="cov0" title="0">{
@@ -979,10 +1027,12 @@ func (dialector Dialector) DefaultValueOf(field *schema.Field) clause.Expression
         <span class="cov0" title="0">return clause.Expr{}</span>
 }
 
-func (dialector Dialector) BindVarTo(writer clause.Writer, stmt *gorm.Statement, v interface{}) <span class="cov8" title="1">{
+// BindVarTo writes the bind variable to the clause writer.
+func (dialector Dialector) BindVarTo(writer clause.Writer, _ *gorm.Statement, _ interface{}) <span class="cov8" title="1">{
         _ = writer.WriteByte('?')
 }</span>
 
+// QuoteTo writes quoted identifiers to the writer.
 func (dialector Dialector) QuoteTo(writer clause.Writer, str string) <span class="cov8" title="1">{
         var (
                 underQuoted, selfQuoted bool
@@ -1012,11 +1062,11 @@ func (dialector Dialector) QuoteTo(writer clause.Writer, str string) <span class
                                 _ = writer.WriteByte('"')
                                 underQuoted = true
                                 if selfQuoted = continuousBacktick &gt; 0; selfQuoted </span><span class="cov0" title="0">{
-                                        continuousBacktick -= 1
+                                        continuousBacktick--
                                 }</span>
                         }
 
-                        <span class="cov8" title="1">for ; continuousBacktick &gt; 0; continuousBacktick -= 1 </span><span class="cov0" title="0">{
+                        <span class="cov8" title="1">for ; continuousBacktick &gt; 0; continuousBacktick-- </span><span class="cov0" title="0">{
                                 _, _ = writer.WriteString(`""`)
                         }</span>
 
@@ -1031,20 +1081,23 @@ func (dialector Dialector) QuoteTo(writer clause.Writer, str string) <span class
         <span class="cov8" title="1">_ = writer.WriteByte('"')</span>
 }
 
+// Explain returns an explanation of the SQL query.
 func (dialector Dialector) Explain(sql string, vars ...interface{}) string <span class="cov0" title="0">{
         return logger.ExplainSQL(sql, nil, `"`, vars...)
 }</span>
 
+// SavePoint creates a savepoint with the given name.
 func (dialector Dialector) SavePoint(tx *gorm.DB, name string) error <span class="cov0" title="0">{
         return tx.Exec("SAVEPOINT " + name).Error
 }</span>
 
+// RollbackTo rolls back to the given savepoint.
 func (dialector Dialector) RollbackTo(tx *gorm.DB, name string) error <span class="cov0" title="0">{
         return tx.Exec("ROLLBACK TO SAVEPOINT " + name).Error
 }</span>
 
 // beforeCreateCallback prepares the statement for auto-increment handling
-func beforeCreateCallback(db *gorm.DB) {<span class="cov8" title="1">
+func beforeCreateCallback(_ *gorm.DB) {<span class="cov8" title="1">
         // Nothing special needed here, just ensuring the statement is prepared
 }</span>
 
@@ -1068,40 +1121,37 @@ func createCallback(db *gorm.DB) <span class="cov8" title="1">{
                 }
 
                 <span class="cov8" title="1">if hasAutoIncrement </span><span class="cov8" title="1">{
-                        // Check if this is a batch insert (slice)
-                        if db.Statement.ReflectValue.Kind() == reflect.Slice </span>{<span class="cov0" title="0">
-                                // For batch inserts with auto-increment, fall back to default GORM behavior
-                                // DuckDB doesn't support RETURNING with multiple rows efficiently
-                                // Let GORM handle this normally - don't return early
-                        }</span> else<span class="cov8" title="1"> {
-                                // Build custom INSERT with RETURNING for single record
-                                sql, vars := buildInsertSQL(db, autoIncrementField)
-                                if sql != "" </span><span class="cov8" title="1">{
-                                        // Execute with RETURNING to get the auto-generated ID
-                                        var id int64
-                                        if err := db.Raw(sql, vars...).Row().Scan(&amp;id); err != nil </span><span class="cov8" title="1">{
-                                                db.AddError(err)
+                        // Build custom INSERT with RETURNING
+                        sql, vars := buildInsertSQL(db, autoIncrementField)
+                        if sql != "" </span><span class="cov8" title="1">{
+                                // Execute with RETURNING to get the auto-generated ID
+                                var id int64
+                                if err := db.Raw(sql, vars...).Row().Scan(&amp;id); err != nil </span><span class="cov8" title="1">{
+                                        if addErr := db.AddError(err); addErr != nil </span><span class="cov8" title="1">{
                                                 return
                                         }</span>
+                                        <span class="cov0" title="0">return</span>
+                                }
 
-                                        // Set the ID in the model using GORM's ReflectValue
-                                        <span class="cov8" title="1">if db.Statement.ReflectValue.IsValid() &amp;&amp; db.Statement.ReflectValue.CanAddr() </span><span class="cov8" title="1">{
-                                                modelValue := db.Statement.ReflectValue
+                                // Set the ID in the model using GORM's ReflectValue
+                                <span class="cov8" title="1">if db.Statement.ReflectValue.IsValid() &amp;&amp; db.Statement.ReflectValue.CanAddr() </span><span class="cov8" title="1">{
+                                        modelValue := db.Statement.ReflectValue
 
-                                                if idField := modelValue.FieldByName(autoIncrementField.Name); idField.IsValid() &amp;&amp; idField.CanSet() </span><span class="cov8" title="1">{
-                                                        // Handle different integer types
-                                                        switch idField.Kind() </span>{
-                                                        case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:<span class="cov8" title="1">
-                                                                idField.SetUint(uint64(id))</span>
-                                                        case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:<span class="cov0" title="0">
-                                                                idField.SetInt(id)</span>
-                                                        }
+                                        if idField := modelValue.FieldByName(autoIncrementField.Name); idField.IsValid() &amp;&amp; idField.CanSet() </span><span class="cov8" title="1">{
+                                                // Handle different integer types
+                                                switch idField.Kind() </span>{
+                                                case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:<span class="cov8" title="1">
+                                                        if id &gt;= 0 </span><span class="cov8" title="1">{
+                                                                idField.SetUint(uint64(id))
+                                                        }</span>
+                                                case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:<span class="cov0" title="0">
+                                                        idField.SetInt(id)</span>
                                                 }
                                         }
-
-                                        <span class="cov8" title="1">db.Statement.RowsAffected = 1
-                                        return</span>
                                 }
+
+                                <span class="cov8" title="1">db.Statement.RowsAffected = 1
+                                return</span>
                         }
                 }
         }
@@ -1112,8 +1162,10 @@ func createCallback(db *gorm.DB) <span class="cov8" title="1">{
         }</span>
 
         <span class="cov0" title="0">if result, err := db.Statement.ConnPool.ExecContext(db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...); err != nil </span><span class="cov0" title="0">{
-                db.AddError(err)
-        }</span> else<span class="cov0" title="0"> {
+                if addErr := db.AddError(err); addErr != nil </span><span class="cov0" title="0">{
+                        return
+                }</span>
+        } else<span class="cov0" title="0"> {
                 if rows, _ := result.RowsAffected(); rows &gt; 0 </span><span class="cov0" title="0">{
                         db.Statement.RowsAffected = rows
                 }</span>
@@ -1126,17 +1178,10 @@ func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []in
                 return "", nil
         }</span>
 
-        // Handle batch inserts (slice of structs) - use GORM's default behavior
-        <span class="cov8" title="1">reflectValue := db.Statement.ReflectValue
-        if reflectValue.Kind() == reflect.Slice </span><span class="cov0" title="0">{
-                // For batch inserts, fall back to GORM's built-in logic
-                // but we need to handle this at the callback level
-                return "", nil
-        }</span>
-
-        <span class="cov8" title="1">var fields []string
-        var placeholders []string
-        var values []interface{}
+        <span class="cov8" title="1">fieldCount := len(db.Statement.Schema.Fields)
+        fields := make([]string, 0, fieldCount)
+        placeholders := make([]string, 0, fieldCount)
+        values := make([]interface{}, 0, fieldCount)
 
         // Build field list excluding auto-increment field
         for _, field := range db.Statement.Schema.Fields </span><span class="cov8" title="1">{
@@ -1144,8 +1189,8 @@ func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []in
                         continue</span> // Skip auto-increment field
                 }
 
-                // Get the value for this field from the single struct
-                <span class="cov8" title="1">fieldValue := reflectValue.FieldByName(field.Name)
+                // Get the value for this field
+                <span class="cov8" title="1">fieldValue := db.Statement.ReflectValue.FieldByName(field.Name)
                 if !fieldValue.IsValid() </span><span class="cov0" title="0">{
                         continue</span>
                 }
@@ -1337,8 +1382,8 @@ const (
         // Analytics Extensions
         ExtensionAutoComplete = "autocomplete"
         ExtensionFTS          = "fts"
-        ExtensionTPC_H        = "tpch"
-        ExtensionTPC_DS       = "tpcds"
+        ExtensionTPCH         = "tpch"
+        ExtensionTPCDS        = "tpcds"
 
         // Data Format Extensions
         ExtensionCSV    = "csv"
@@ -1750,15 +1795,18 @@ const (
         sqlTypeInteger = "INTEGER"
 )
 
+// Migrator implements gorm.Migrator interface for DuckDB database.
 type Migrator struct {
         migrator.Migrator
 }
 
+// CurrentDatabase returns the current database name.
 func (m Migrator) CurrentDatabase() (name string) <span class="cov0" title="0">{
         _ = m.DB.Raw("SELECT current_database()").Row().Scan(&amp;name)
         return
 }</span>
 
+// FullDataTypeOf returns the full data type for a field including constraints.
 // Override FullDataTypeOf to prevent GORM from adding duplicate PRIMARY KEY clauses
 func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr <span class="cov8" title="1">{
         // Get the base data type from our dialector
@@ -1820,8 +1868,9 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr <span class="c
         <span class="cov8" title="1">return expr</span>
 }
 
+// AlterColumn modifies a column definition in DuckDB, handling syntax limitations.
 func (m Migrator) AlterColumn(value interface{}, field string) error <span class="cov0" title="0">{
-        return m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
+        err := m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
                 if stmt.Schema != nil </span><span class="cov0" title="0">{
                         if field := stmt.Schema.LookUpField(field); field != nil </span><span class="cov0" title="0">{
                                 // For ALTER COLUMN, only use the base data type without defaults
@@ -1838,10 +1887,15 @@ func (m Migrator) AlterColumn(value interface{}, field string) error <span class
                 }
                 <span class="cov0" title="0">return fmt.Errorf("failed to look up field with name: %s", field)</span>
         })
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to alter column: %w", err)
+        }</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
+// RenameColumn renames a column in the database table.
 func (m Migrator) RenameColumn(value interface{}, oldName, newName string) error <span class="cov0" title="0">{
-        return m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
+        err := m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
                 if stmt.Schema != nil </span><span class="cov0" title="0">{
                         if field := stmt.Schema.LookUpField(oldName); field != nil </span><span class="cov0" title="0">{
                                 oldName = field.DBName
@@ -1857,19 +1911,29 @@ func (m Migrator) RenameColumn(value interface{}, oldName, newName string) error
                         m.CurrentTable(stmt), clause.Column{Name: oldName}, clause.Column{Name: newName},
                 ).Error</span>
         })
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to rename column: %w", err)
+        }</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
+// RenameIndex renames an index in the database.
 func (m Migrator) RenameIndex(value interface{}, oldName, newName string) error <span class="cov0" title="0">{
-        return m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
+        err := m.RunWithValue(value, func(_ *gorm.Statement) error </span><span class="cov0" title="0">{
                 return m.DB.Exec(
                         "ALTER INDEX ? RENAME TO ?",
                         clause.Column{Name: oldName}, clause.Column{Name: newName},
                 ).Error
         }</span>)
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to rename index: %w", err)
+        }</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
+// DropIndex drops an index from the database.
 func (m Migrator) DropIndex(value interface{}, name string) error <span class="cov0" title="0">{
-        return m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
+        err := m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
                 if stmt.Schema != nil </span><span class="cov0" title="0">{
                         if idx := stmt.Schema.LookIndex(name); idx != nil </span><span class="cov0" title="0">{
                                 name = idx.Name
@@ -1878,18 +1942,28 @@ func (m Migrator) DropIndex(value interface{}, name string) error <span class="c
 
                 <span class="cov0" title="0">return m.DB.Exec("DROP INDEX IF EXISTS ?", clause.Column{Name: name}).Error</span>
         })
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to drop index: %w", err)
+        }</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
+// DropConstraint drops a constraint from the database.
 func (m Migrator) DropConstraint(value interface{}, name string) error <span class="cov0" title="0">{
-        return m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
+        err := m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
                 constraint, table := m.GuessConstraintInterfaceAndTable(stmt, name)
                 if constraint != nil </span><span class="cov0" title="0">{
                         name = constraint.GetName()
                 }</span>
                 <span class="cov0" title="0">return m.Migrator.DB.Exec("ALTER TABLE ? DROP CONSTRAINT ?", clause.Table{Name: table}, clause.Column{Name: name}).Error</span>
         })
+        <span class="cov0" title="0">if err != nil </span><span class="cov0" title="0">{
+                return fmt.Errorf("failed to drop constraint: %w", err)
+        }</span>
+        <span class="cov0" title="0">return nil</span>
 }
 
+// HasTable checks if a table exists in the database.
 func (m Migrator) HasTable(value interface{}) bool <span class="cov8" title="1">{
         var count int64
 
@@ -1903,6 +1977,7 @@ func (m Migrator) HasTable(value interface{}) bool <span class="cov8" title="1">
         <span class="cov8" title="1">return count &gt; 0</span>
 }
 
+// GetTables returns a list of all table names in the database.
 func (m Migrator) GetTables() (tableList []string, err error) <span class="cov0" title="0">{
         err = m.DB.Raw(
                 "SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'",
@@ -1910,6 +1985,7 @@ func (m Migrator) GetTables() (tableList []string, err error) <span class="cov0"
         return
 }</span>
 
+// HasColumn checks if a column exists in the database table.
 func (m Migrator) HasColumn(value interface{}, field string) bool <span class="cov0" title="0">{
         var count int64
         _ = m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
@@ -1929,6 +2005,7 @@ func (m Migrator) HasColumn(value interface{}, field string) bool <span class="c
         <span class="cov0" title="0">return count &gt; 0</span>
 }
 
+// HasIndex checks if an index exists in the database.
 func (m Migrator) HasIndex(value interface{}, name string) bool <span class="cov0" title="0">{
         var count int64
         _ = m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
@@ -1947,6 +2024,7 @@ func (m Migrator) HasIndex(value interface{}, name string) bool <span class="cov
         <span class="cov0" title="0">return count &gt; 0</span>
 }
 
+// HasConstraint checks if a constraint exists in the database.
 func (m Migrator) HasConstraint(value interface{}, name string) bool <span class="cov0" title="0">{
         var count int64
         _ = m.RunWithValue(value, func(stmt *gorm.Statement) error </span><span class="cov0" title="0">{
@@ -1964,6 +2042,7 @@ func (m Migrator) HasConstraint(value interface{}, name string) bool <span class
         <span class="cov0" title="0">return count &gt; 0</span>
 }
 
+// CreateView creates a database view.
 func (m Migrator) CreateView(name string, option gorm.ViewOption) error <span class="cov0" title="0">{
         if option.Query == nil </span><span class="cov0" title="0">{
                 return gorm.ErrSubQueryRequired
@@ -1988,10 +2067,12 @@ func (m Migrator) CreateView(name string, option gorm.ViewOption) error <span cl
         <span class="cov0" title="0">return m.DB.Exec(m.Explain(sql.String(), m.DB.Statement.Vars...)).Error</span>
 }
 
+// DropView drops a database view.
 func (m Migrator) DropView(name string) error <span class="cov0" title="0">{
         return m.DB.Exec("DROP VIEW IF EXISTS ?", clause.Table{Name: name}).Error
 }</span>
 
+// GetTypeAliases returns type aliases for the given database type name.
 func (m Migrator) GetTypeAliases(databaseTypeName string) []string <span class="cov0" title="0">{
         aliases := map[string][]string{
                 "boolean":   {"bool"},
@@ -2027,7 +2108,7 @@ func (m Migrator) CreateTable(values ...interface{}) error <span class="cov8" ti
                                                 if err := m.DB.Exec(createSeqSQL).Error; err != nil </span><span class="cov0" title="0">{
                                                         // Ignore "already exists" errors
                                                         if !strings.Contains(strings.ToLower(err.Error()), "already exists") </span><span class="cov0" title="0">{
-                                                                return fmt.Errorf("failed to create sequence %s: %v", sequenceName, err)
+                                                                return fmt.Errorf("failed to create sequence %s: %w", sequenceName, err)
                                                         }</span>
                                                 }
                                         }
@@ -2037,7 +2118,7 @@ func (m Migrator) CreateTable(values ...interface{}) error <span class="cov8" ti
                         // Now create the table using the parent method
                         <span class="cov8" title="1">return m.Migrator.CreateTable(value)</span>
                 }); err != nil <span class="cov0" title="0">{
-                        return err
+                        return fmt.Errorf("failed to create table: %w", err)
                 }</span>
         }
         <span class="cov8" title="1">return nil</span>

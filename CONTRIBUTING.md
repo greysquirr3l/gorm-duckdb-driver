@@ -6,7 +6,7 @@ Thank you for your interest in contributing to the GORM DuckDB driver! This proj
 
 ### Prerequisites
 
-- Go 1.24 or higher
+- Go 1.23 or higher
 - Git
 
 ### Local Development
@@ -39,6 +39,10 @@ go test -v -cover
 - Use `go fmt` for formatting
 - Ensure code passes `go vet`
 - Add appropriate comments for public APIs
+- **Follow GORM Style Guidelines**: Use `primaryKey` (camelCase) not `primarykey` in model tags
+- **Use Context**: Include context and timeout controls in examples and code
+- **Error Handling**: Utilize DuckDB-specific error translation functions
+- **Performance**: Implement DuckDB-optimized patterns (batch sizes, field selection)
 
 ### Testing
 

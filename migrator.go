@@ -39,7 +39,7 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 	if field.PrimaryKey {
 		// DuckDB doesn't support native AUTO_INCREMENT, so we use sequences to emulate this behavior for auto-increment primary keys
 		// Check if this is an auto-increment field (no default value specified)
-		if field.AutoIncrement || (!field.HasDefaultValue && field.DataType == schema.Uint) {
+		if m.isAutoIncrementField(field) {
 			// Use BIGINT with a default sequence value
 			expr.SQL = "BIGINT DEFAULT nextval('seq_" + strings.ToLower(field.Schema.Table) + "_" + strings.ToLower(field.DBName) + "')"
 		} else {

@@ -37,7 +37,7 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 
 	// For primary key fields, ensure clean type definition without duplicate PRIMARY KEY
 	if field.PrimaryKey {
-		// For DuckDB auto-increment primary keys, use a sequence-based approach
+		// DuckDB doesn't support native AUTO_INCREMENT, so we use sequences to emulate this behavior for auto-increment primary keys
 		// Check if this is an auto-increment field (no default value specified)
 		if field.AutoIncrement || (!field.HasDefaultValue && field.DataType == schema.Uint) {
 			// Use BIGINT with a default sequence value

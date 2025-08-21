@@ -328,7 +328,7 @@ func (m Migrator) CreateTable(values ...interface{}) error {
 						createSeqSQL := fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s START 1", sequenceName)
 						if err := m.DB.Exec(createSeqSQL).Error; err != nil {
 							// Ignore "already exists" errors
-							if !strings.Contains(strings.ToLower(err.Error()), "already exists") {
+							if !isAlreadyExistsError(err) {
 								return fmt.Errorf("failed to create sequence %s: %w", sequenceName, err)
 							}
 						}

@@ -11,7 +11,7 @@ import (
 
 // User model demonstrating basic GORM features
 type User struct {
-	ID        uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	ID        uint      `gorm:"primaryKey" json:"id"`
 	Name      string    `gorm:"size:100;not null" json:"name"`
 	Email     string    `gorm:"size:255;uniqueIndex" json:"email"`
 	Age       uint8     `json:"age"`

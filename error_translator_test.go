@@ -12,8 +12,8 @@ import (
 )
 
 // Test model for error translator functionality
-type ErrorTestUser struct {
-	ID    uint   `gorm:"primarykey"`
+type TestErrorModel struct {
+	ID    uint   `gorm:"primaryKey"`
 	Email string `gorm:"size:255;uniqueIndex"`
 	Name  string `gorm:"size:100;not null;check:name != ''"`
 }
@@ -25,7 +25,7 @@ func setupErrorTestDB(t *testing.T) *gorm.DB {
 	db, err := gorm.Open(dialector, &gorm.Config{})
 	require.NoError(t, err)
 
-	err = db.AutoMigrate(&ErrorTestUser{})
+	err = db.AutoMigrate(&TestErrorModel{})
 	require.NoError(t, err)
 
 	return db
@@ -311,12 +311,12 @@ func TestErrorTranslator_RealDatabaseErrors(t *testing.T) {
 	db := setupErrorTestDB(t)
 
 	// Test real duplicate key error
-	user1 := ErrorTestUser{Email: "test@example.com", Name: "Test User"}
+	user1 := TestErrorModel{Email: "test@example.com", Name: "Test User"}
 	err := db.Create(&user1).Error
 	require.NoError(t, err)
 
 	// Try to create another user with the same email
-	user2 := ErrorTestUser{Email: "test@example.com", Name: "Another User"}
+	user2 := TestErrorModel{Email: "test@example.com", Name: "Another User"}
 	err = db.Create(&user2).Error
 	assert.Error(t, err)
 
@@ -325,10 +325,10 @@ func TestErrorTranslator_RealDatabaseErrors(t *testing.T) {
 	// but we ensure it's handled gracefully
 
 	// Test table not found error
-	err = db.Table("non_existent_table").First(&ErrorTestUser{}).Error
+	err = db.Table("non_existent_table").First(&TestErrorModel{}).Error
 	assert.Error(t, err)
 
 	// Test column not found error
-	err = db.Select("non_existent_column").First(&ErrorTestUser{}).Error
+	err = db.Select("non_existent_column").First(&TestErrorModel{}).Error
 	assert.Error(t, err)
 }

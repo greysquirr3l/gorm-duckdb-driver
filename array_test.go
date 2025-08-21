@@ -12,8 +12,8 @@ import (
 )
 
 // Test model for array functionality
-type ArrayTestModel struct {
-	ID        uint               `gorm:"primarykey"`
+type TestArrayModel struct {
+	ID        uint               `gorm:"primaryKey"`
 	StringArr duckdb.StringArray `json:"string_arr"`
 	FloatArr  duckdb.FloatArray  `json:"float_arr"`
 	IntArr    duckdb.IntArray    `json:"int_arr"`
@@ -23,7 +23,7 @@ func setupArrayTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupTestDB(t)
 
-	err := db.AutoMigrate(&ArrayTestModel{})
+	err := db.AutoMigrate(&TestArrayModel{})
 	require.NoError(t, err)
 
 	return db
@@ -422,7 +422,7 @@ func TestArrays_DatabaseIntegration(t *testing.T) {
 	db := setupArrayTestDB(t)
 
 	// Test data
-	model := ArrayTestModel{
+	model := TestArrayModel{
 		StringArr: duckdb.StringArray{"software", "analytics", "business"},
 		FloatArr:  duckdb.FloatArray{4.5, 4.8, 4.2, 4.9},
 		IntArr:    duckdb.IntArray{1250, 890, 2340, 567},
@@ -434,7 +434,7 @@ func TestArrays_DatabaseIntegration(t *testing.T) {
 	assert.NotZero(t, model.ID)
 
 	// Retrieve record
-	var retrieved ArrayTestModel
+	var retrieved TestArrayModel
 	err = db.First(&retrieved, model.ID).Error
 	require.NoError(t, err)
 
@@ -452,7 +452,7 @@ func TestArrays_DatabaseIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	// Verify update
-	var updated ArrayTestModel
+	var updated TestArrayModel
 	err = db.First(&updated, model.ID).Error
 	require.NoError(t, err)
 
@@ -468,7 +468,7 @@ func TestArrays_EmptyAndNilHandling(t *testing.T) {
 	db := setupArrayTestDB(t)
 
 	// Test with empty arrays
-	model := ArrayTestModel{
+	model := TestArrayModel{
 		StringArr: duckdb.StringArray{},
 		FloatArr:  duckdb.FloatArray{},
 		IntArr:    duckdb.IntArray{},
@@ -477,7 +477,7 @@ func TestArrays_EmptyAndNilHandling(t *testing.T) {
 	err := db.Create(&model).Error
 	require.NoError(t, err)
 
-	var retrieved ArrayTestModel
+	var retrieved TestArrayModel
 	err = db.First(&retrieved, model.ID).Error
 	require.NoError(t, err)
 
@@ -486,7 +486,7 @@ func TestArrays_EmptyAndNilHandling(t *testing.T) {
 	assert.Equal(t, 0, len(retrieved.IntArr))
 
 	// Test with nil arrays
-	model2 := ArrayTestModel{
+	model2 := TestArrayModel{
 		StringArr: nil,
 		FloatArr:  nil,
 		IntArr:    nil,
@@ -495,7 +495,7 @@ func TestArrays_EmptyAndNilHandling(t *testing.T) {
 	err = db.Create(&model2).Error
 	require.NoError(t, err)
 
-	var retrieved2 ArrayTestModel
+	var retrieved2 TestArrayModel
 	err = db.First(&retrieved2, model2.ID).Error
 	require.NoError(t, err)
 

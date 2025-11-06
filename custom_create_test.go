@@ -36,11 +36,10 @@ func customCreateCallback(db *gorm.DB) {
 			}
 			
 			// Get field value from the model
-			if fieldValue, ok := db.Statement.ReflectValue.FieldByName(field.Name).Interface().(interface{}); ok {
-				debugLog("customCreateCallback: adding field %s = %v", field.DBName, fieldValue)
-				columns = append(columns, clause.Column{Name: field.DBName})
-				values = append(values, fieldValue)
-			}
+			fieldValue := db.Statement.ReflectValue.FieldByName(field.Name).Interface()
+			debugLog("customCreateCallback: adding field %s = %v", field.DBName, fieldValue)
+			columns = append(columns, clause.Column{Name: field.DBName})
+			values = append(values, fieldValue)
 		}
 		
 		if len(columns) > 0 {

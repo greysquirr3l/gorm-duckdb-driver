@@ -1,13 +1,11 @@
-package debugapp
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
-	
-	"gorm.io/gorm"
+
 	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
+	"gorm.io/gorm"
 )
 
 func main() {

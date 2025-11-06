@@ -249,4 +249,4 @@ The driver is now **production-ready** and can be used as a drop-in replacement 
 
 ---
 
-**🦆 DuckDB + GORM = Perfect Harmony! 🦆**
+## 🦆 DuckDB + GORM = Perfect Harmony! 🦆

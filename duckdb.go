@@ -1029,14 +1029,13 @@ func duckdbCreateCallback(db *gorm.DB) {
 			debugLog("duckdbCreateCallback: QueryRow succeeded, ID: %v", id)
 			
 			// Set the ID back to the model
-			if autoIncrementField != nil {
-				// Get the struct value (dereference pointer if needed)
-				structValue := stmt.ReflectValue
-				if structValue.Kind() == reflect.Ptr {
-					structValue = structValue.Elem()
-				}
-				
-				fieldValue := structValue.FieldByName(autoIncrementField.Name)
+			// Get the struct value (dereference pointer if needed)
+			structValue := stmt.ReflectValue
+			if structValue.Kind() == reflect.Ptr {
+				structValue = structValue.Elem()
+			}
+			
+			fieldValue := structValue.FieldByName(autoIncrementField.Name)
 				debugLog("duckdbCreateCallback: Setting field %s, Valid: %t, CanSet: %t, Kind: %s", 
 					autoIncrementField.Name, fieldValue.IsValid(), fieldValue.CanSet(), fieldValue.Kind())
 				
@@ -1081,7 +1080,6 @@ func duckdbCreateCallback(db *gorm.DB) {
 				} else {
 					debugLog("duckdbCreateCallback: Cannot set field %s", autoIncrementField.Name)
 				}
-			}
 		}
 	} else {
 		// Use Exec for non-returning operations

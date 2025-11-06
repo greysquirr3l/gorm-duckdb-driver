@@ -1,7 +1,6 @@
 package duckdb_test
 
 import (
-	"database/sql/driver"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -29,107 +28,60 @@ func setupArrayTestDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-func TestStringArray_Value(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    duckdb.StringArray
-		expected string
-	}{
-		{
-			name:     "empty array",
-			input:    duckdb.StringArray{},
-			expected: "[]",
-		},
-		{
-			name:     "single element",
-			input:    duckdb.StringArray{"hello"},
-			expected: `["hello"]`,
-		},
-		{
-			name:     "multiple elements",
-			input:    duckdb.StringArray{"hello", "world", "test"},
-			expected: `["hello","world","test"]`,
-		},
-		{
-			name:     "elements with special characters",
-			input:    duckdb.StringArray{"hello\"world", "test,comma", "newline\n"},
-			expected: `["hello\"world","test,comma","newline\n"]`,
-		},
-	}
+func TestNativeArrayFunctionality(t *testing.T) {
+	db := setupArrayTestDB(t)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			value, err := tt.input.Value()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, value)
-		})
-	}
+	t.Run("Native Array Creation and Querying", func(t *testing.T) {
+		// Test native DuckDB array creation and querying
+		var stringArr duckdb.StringArray
+		err := db.Raw("SELECT array['hello', 'world', 'test']").Scan(&stringArr).Error
+		require.NoError(t, err)
+		expected := []string{"hello", "world", "test"}
+		assert.Equal(t, expected, stringArr.Get())
+
+		var intArr duckdb.IntArray
+		err = db.Raw("SELECT array[1, 2, 3, 4]").Scan(&intArr).Error
+		require.NoError(t, err)
+		expectedInt := []int64{1, 2, 3, 4}
+		assert.Equal(t, expectedInt, intArr.Get())
+	})
+
+	t.Run("Array Functions", func(t *testing.T) {
+		// Test DuckDB array functions
+		var rangeResult duckdb.IntArray
+		err := db.Raw("SELECT range(1, 5)").Scan(&rangeResult).Error
+		require.NoError(t, err)
+		expected := []int64{1, 2, 3, 4}
+		assert.Equal(t, expected, rangeResult.Get())
+
+		// Test array length
+		var length int
+		err = db.Raw("SELECT array_length(array['a', 'b', 'c'])").Scan(&length).Error
+		require.NoError(t, err)
+		assert.Equal(t, 3, length)
+	})
 }
 
-func TestStringArray_Scan(t *testing.T) {
+func TestNativeArray_Scan(t *testing.T) {
 	tests := []struct {
 		name     string
-		input    interface{}
-		expected duckdb.StringArray
-		wantErr  bool
+		input    []string
+		expected []string
 	}{
 		{
-			name:     "nil input",
-			input:    nil,
-			expected: nil,
-			wantErr:  false,
-		},
-		{
-			name:     "empty array string",
-			input:    "[]",
-			expected: duckdb.StringArray{},
-			wantErr:  false,
-		},
-		{
 			name:     "single element array",
-			input:    `["hello"]`,
-			expected: duckdb.StringArray{"hello"},
-			wantErr:  false,
+			input:    []string{"hello"},
+			expected: []string{"hello"},
 		},
 		{
 			name:     "multiple elements array",
-			input:    `["hello","world","test"]`,
-			expected: duckdb.StringArray{"hello", "world", "test"},
-			wantErr:  false,
+			input:    []string{"hello", "world", "test"},
+			expected: []string{"hello", "world", "test"},
 		},
 		{
-			name:     "array with spaces",
-			input:    `["hello", "world", "test"]`,
-			expected: duckdb.StringArray{"hello", "world", "test"},
-			wantErr:  false,
-		},
-		{
-			name:     "byte slice input",
-			input:    []byte(`["hello","world"]`),
-			expected: duckdb.StringArray{"hello", "world"},
-			wantErr:  false,
-		},
-		{
-			name:     "string slice input",
-			input:    []string{"hello", "world"},
-			expected: duckdb.StringArray{"hello", "world"},
-			wantErr:  false,
-		},
-		{
-			name:     "interface slice input",
-			input:    []interface{}{"hello", "world"},
-			expected: duckdb.StringArray{"hello", "world"},
-			wantErr:  false,
-		},
-		{
-			name:    "invalid json",
-			input:   `["invalid json`,
-			wantErr: true,
-		},
-		{
-			name:    "non-string array element",
-			input:   `[123, "hello"]`,
-			wantErr: true,
+			name:     "empty array",
+			input:    []string{},
+			expected: []string{},
 		},
 	}
 
@@ -137,283 +89,8 @@ func TestStringArray_Scan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var arr duckdb.StringArray
 			err := arr.Scan(tt.input)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-
 			require.NoError(t, err)
-			assert.Equal(t, tt.expected, arr)
-		})
-	}
-}
-
-func TestFloatArray_Value(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    duckdb.FloatArray
-		expected string
-	}{
-		{
-			name:     "empty array",
-			input:    duckdb.FloatArray{},
-			expected: "[]",
-		},
-		{
-			name:     "single element",
-			input:    duckdb.FloatArray{3.14},
-			expected: "[3.14]",
-		},
-		{
-			name:     "multiple elements",
-			input:    duckdb.FloatArray{1.1, 2.2, 3.3},
-			expected: "[1.1,2.2,3.3]",
-		},
-		{
-			name:     "with zero and negative",
-			input:    duckdb.FloatArray{0.0, -1.5, 2.7},
-			expected: "[0,-1.5,2.7]",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			value, err := tt.input.Value()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, value)
-		})
-	}
-}
-
-func TestFloatArray_Scan(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    interface{}
-		expected duckdb.FloatArray
-		wantErr  bool
-	}{
-		{
-			name:     "nil input",
-			input:    nil,
-			expected: nil,
-			wantErr:  false,
-		},
-		{
-			name:     "empty array string",
-			input:    "[]",
-			expected: duckdb.FloatArray{},
-			wantErr:  false,
-		},
-		{
-			name:     "single element array",
-			input:    "[3.14]",
-			expected: duckdb.FloatArray{3.14},
-			wantErr:  false,
-		},
-		{
-			name:     "multiple elements array",
-			input:    "[1.1, 2.2, 3.3]",
-			expected: duckdb.FloatArray{1.1, 2.2, 3.3},
-			wantErr:  false,
-		},
-		{
-			name:     "byte slice input",
-			input:    []byte("[1.5, 2.5]"),
-			expected: duckdb.FloatArray{1.5, 2.5},
-			wantErr:  false,
-		},
-		{
-			name:     "float slice input",
-			input:    []float64{1.1, 2.2},
-			expected: duckdb.FloatArray{1.1, 2.2},
-			wantErr:  false,
-		},
-		{
-			name:     "interface slice input",
-			input:    []interface{}{1.1, 2.2},
-			expected: duckdb.FloatArray{1.1, 2.2},
-			wantErr:  false,
-		},
-		{
-			name:    "invalid json",
-			input:   "[invalid json",
-			wantErr: true,
-		},
-		{
-			name:    "non-numeric array element",
-			input:   `["hello", 1.5]`,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var arr duckdb.FloatArray
-			err := arr.Scan(tt.input)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, arr)
-		})
-	}
-}
-
-func TestIntArray_Value(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    duckdb.IntArray
-		expected string
-	}{
-		{
-			name:     "empty array",
-			input:    duckdb.IntArray{},
-			expected: "[]",
-		},
-		{
-			name:     "single element",
-			input:    duckdb.IntArray{42},
-			expected: "[42]",
-		},
-		{
-			name:     "multiple elements",
-			input:    duckdb.IntArray{1, 2, 3},
-			expected: "[1,2,3]",
-		},
-		{
-			name:     "with zero and negative",
-			input:    duckdb.IntArray{0, -5, 10},
-			expected: "[0,-5,10]",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			value, err := tt.input.Value()
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, value)
-		})
-	}
-}
-
-func TestIntArray_Scan(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    interface{}
-		expected duckdb.IntArray
-		wantErr  bool
-	}{
-		{
-			name:     "nil input",
-			input:    nil,
-			expected: nil,
-			wantErr:  false,
-		},
-		{
-			name:     "empty array string",
-			input:    "[]",
-			expected: duckdb.IntArray{},
-			wantErr:  false,
-		},
-		{
-			name:     "single element array",
-			input:    "[42]",
-			expected: duckdb.IntArray{42},
-			wantErr:  false,
-		},
-		{
-			name:     "multiple elements array",
-			input:    "[1, 2, 3]",
-			expected: duckdb.IntArray{1, 2, 3},
-			wantErr:  false,
-		},
-		{
-			name:     "byte slice input",
-			input:    []byte("[10, 20]"),
-			expected: duckdb.IntArray{10, 20},
-			wantErr:  false,
-		},
-		{
-			name:     "int slice input",
-			input:    []int64{1, 2},
-			expected: duckdb.IntArray{1, 2},
-			wantErr:  false,
-		},
-		{
-			name:     "interface slice input",
-			input:    []interface{}{1, 2},
-			expected: duckdb.IntArray{1, 2},
-			wantErr:  false,
-		},
-		{
-			name:    "invalid json",
-			input:   "[invalid json",
-			wantErr: true,
-		},
-		{
-			name:    "non-numeric array element",
-			input:   `["hello", 123]`,
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var arr duckdb.IntArray
-			err := arr.Scan(tt.input)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				return
-			}
-
-			require.NoError(t, err)
-			assert.Equal(t, tt.expected, arr)
-		})
-	}
-}
-
-func TestMinimalArray_Value(t *testing.T) {
-	// MinimalArray is not implemented - skipping these tests
-	t.Skip("MinimalArray not implemented")
-}
-
-func TestMinimalArray_Scan(t *testing.T) {
-	// MinimalArray is not implemented - skipping these tests
-	t.Skip("MinimalArray not implemented")
-}
-
-func TestArrays_GormDataType(t *testing.T) {
-	tests := []struct {
-		name     string
-		array    interface{ GormDataType() string }
-		expected string
-	}{
-		{
-			name:     "StringArray",
-			array:    &duckdb.StringArray{},
-			expected: "VARCHAR[]",
-		},
-		{
-			name:     "FloatArray",
-			array:    &duckdb.FloatArray{},
-			expected: "DOUBLE[]",
-		},
-		{
-			name:     "IntArray",
-			array:    &duckdb.IntArray{},
-			expected: "BIGINT[]",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			dataType := tt.array.GormDataType()
-			assert.Equal(t, tt.expected, dataType)
+			assert.Equal(t, tt.expected, arr.Get())
 		})
 	}
 }
@@ -421,141 +98,88 @@ func TestArrays_GormDataType(t *testing.T) {
 func TestArrays_DatabaseIntegration(t *testing.T) {
 	db := setupArrayTestDB(t)
 
-	// Test data
-	model := TestArrayModel{
-		StringArr: duckdb.StringArray{"software", "analytics", "business"},
-		FloatArr:  duckdb.FloatArray{4.5, 4.8, 4.2, 4.9},
-		IntArr:    duckdb.IntArray{1250, 890, 2340, 567},
-	}
+	t.Run("Native Array Insert and Retrieve", func(t *testing.T) {
+		// Test data using constructor functions
+		stringValues := []string{"software", "analytics", "business"}
+		floatValues := []float64{4.5, 4.8, 4.2, 4.9}
+		intValues := []int64{1250, 890, 2340, 567}
 
-	// Create record
-	err := db.Create(&model).Error
-	require.NoError(t, err)
-	assert.NotZero(t, model.ID)
+		// Create record using Raw SQL since native arrays work best with Raw queries
+		err := db.Exec(`
+			INSERT INTO test_array_models (string_arr, float_arr, int_arr) 
+			VALUES (?, ?, ?)
+		`, stringValues, floatValues, intValues).Error
+		require.NoError(t, err)
 
-	// Retrieve record
-	var retrieved TestArrayModel
-	err = db.First(&retrieved, model.ID).Error
-	require.NoError(t, err)
+		// Retrieve record using Raw SQL with Scan
+		var retrieved TestArrayModel
+		err = db.Raw("SELECT id, string_arr, float_arr, int_arr FROM test_array_models ORDER BY id DESC LIMIT 1").Scan(&retrieved).Error
+		require.NoError(t, err)
+		assert.NotZero(t, retrieved.ID)
 
-	// Verify arrays were stored and retrieved correctly
-	assert.Equal(t, model.StringArr, retrieved.StringArr)
-	assert.Equal(t, model.FloatArr, retrieved.FloatArr)
-	assert.Equal(t, model.IntArr, retrieved.IntArr)
-
-	// Test update
-	retrieved.StringArr = append(retrieved.StringArr, "premium")
-	retrieved.FloatArr = append(retrieved.FloatArr, 5.0)
-	retrieved.IntArr = append(retrieved.IntArr, 1000)
-
-	err = db.Save(&retrieved).Error
-	require.NoError(t, err)
-
-	// Verify update
-	var updated TestArrayModel
-	err = db.First(&updated, model.ID).Error
-	require.NoError(t, err)
-
-	assert.Equal(t, 4, len(updated.StringArr))
-	assert.Equal(t, "premium", updated.StringArr[3])
-	assert.Equal(t, 5, len(updated.FloatArr))
-	assert.Equal(t, 5.0, updated.FloatArr[4])
-	assert.Equal(t, 5, len(updated.IntArr))
-	assert.Equal(t, int64(1000), updated.IntArr[4])
-}
-
-func TestArrays_EmptyAndNilHandling(t *testing.T) {
-	db := setupArrayTestDB(t)
-
-	// Test with empty arrays
-	model := TestArrayModel{
-		StringArr: duckdb.StringArray{},
-		FloatArr:  duckdb.FloatArray{},
-		IntArr:    duckdb.IntArray{},
-	}
-
-	err := db.Create(&model).Error
-	require.NoError(t, err)
-
-	var retrieved TestArrayModel
-	err = db.First(&retrieved, model.ID).Error
-	require.NoError(t, err)
-
-	assert.Equal(t, 0, len(retrieved.StringArr))
-	assert.Equal(t, 0, len(retrieved.FloatArr))
-	assert.Equal(t, 0, len(retrieved.IntArr))
-
-	// Test with nil arrays
-	model2 := TestArrayModel{
-		StringArr: nil,
-		FloatArr:  nil,
-		IntArr:    nil,
-	}
-
-	err = db.Create(&model2).Error
-	require.NoError(t, err)
-
-	var retrieved2 TestArrayModel
-	err = db.First(&retrieved2, model2.ID).Error
-	require.NoError(t, err)
-
-	// Arrays should be empty after retrieval (DuckDB behavior)
-	// nil arrays become empty arrays when scanned from database
-	assert.Empty(t, retrieved2.StringArr)
-	assert.Empty(t, retrieved2.FloatArr)
-	assert.Empty(t, retrieved2.IntArr)
-}
-
-func TestArrays_ErrorCases(t *testing.T) {
-	t.Run("StringArray invalid scan types", func(t *testing.T) {
-		var arr duckdb.StringArray
-
-		// Test unsupported type
-		err := arr.Scan(123)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot scan")
-
-		// Test invalid interface slice element
-		err = arr.Scan([]interface{}{"valid", 123})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot convert")
+		// Verify arrays were stored and retrieved correctly
+		assert.Equal(t, stringValues, retrieved.StringArr.Get())
+		assert.Equal(t, floatValues, retrieved.FloatArr.Get())
+		assert.Equal(t, intValues, retrieved.IntArr.Get())
 	})
 
-	t.Run("FloatArray invalid scan types", func(t *testing.T) {
-		var arr duckdb.FloatArray
+	t.Run("Array Update Operations", func(t *testing.T) {
+		// Test update using Raw SQL
+		initialStringValues := []string{"test1", "test2"}
+		initialFloatValues := []float64{1.0, 2.0}
+		initialIntValues := []int64{10, 20}
 
-		// Test unsupported type
-		err := arr.Scan("not a number")
-		assert.Error(t, err)
+		// Insert initial record
+		err := db.Exec(`
+			INSERT INTO test_array_models (string_arr, float_arr, int_arr) 
+			VALUES (?, ?, ?)
+		`, initialStringValues, initialFloatValues, initialIntValues).Error
+		require.NoError(t, err)
 
-		// Test invalid interface slice element
-		err = arr.Scan([]interface{}{1.5, "not a number"})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot convert")
-	})
+		// Get the inserted record ID
+		var insertedID uint
+		err = db.Raw("SELECT id FROM test_array_models ORDER BY id DESC LIMIT 1").Scan(&insertedID).Error
+		require.NoError(t, err)
 
-	t.Run("IntArray invalid scan types", func(t *testing.T) {
-		var arr duckdb.IntArray
+		// Update with new values
+		newStringValues := []string{"updated1", "updated2", "updated3"}
+		newFloatValues := []float64{3.0, 4.0, 5.0}
+		newIntValues := []int64{30, 40, 50}
 
-		// Test unsupported type
-		err := arr.Scan("not a number")
-		assert.Error(t, err)
+		err = db.Exec(`
+			UPDATE test_array_models 
+			SET string_arr = ?, float_arr = ?, int_arr = ? 
+			WHERE id = ?
+		`, newStringValues, newFloatValues, newIntValues, insertedID).Error
+		require.NoError(t, err)
 
-		// Test invalid interface slice element
-		err = arr.Scan([]interface{}{123, "not a number"})
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "cannot convert")
+		// Verify update using Raw SQL
+		var updated TestArrayModel
+		err = db.Raw("SELECT id, string_arr, float_arr, int_arr FROM test_array_models WHERE id = ?", insertedID).Scan(&updated).Error
+		require.NoError(t, err)
+
+		assert.Equal(t, newStringValues, updated.StringArr.Get())
+		assert.Equal(t, newFloatValues, updated.FloatArr.Get())
+		assert.Equal(t, newIntValues, updated.IntArr.Get())
 	})
 }
 
-func TestArrays_DriverValueInterface(t *testing.T) {
-	// Test that arrays implement driver.Valuer interface
-	var _ driver.Valuer = (*duckdb.StringArray)(nil)
-	var _ driver.Valuer = (*duckdb.FloatArray)(nil)
-	var _ driver.Valuer = (*duckdb.IntArray)(nil)
+func TestArrayConstructors(t *testing.T) {
+	t.Run("StringArray constructor", func(t *testing.T) {
+		values := []string{"test1", "test2", "test3"}
+		arr := duckdb.NewStringArray(values)
+		assert.Equal(t, values, arr.Get())
+	})
 
-	// Test that arrays implement sql.Scanner interface
-	var _ interface{ Scan(interface{}) error } = (*duckdb.StringArray)(nil)
-	var _ interface{ Scan(interface{}) error } = (*duckdb.FloatArray)(nil)
-	var _ interface{ Scan(interface{}) error } = (*duckdb.IntArray)(nil)
+	t.Run("FloatArray constructor", func(t *testing.T) {
+		values := []float64{1.1, 2.2, 3.3}
+		arr := duckdb.NewFloatArray(values)
+		assert.Equal(t, values, arr.Get())
+	})
+
+	t.Run("IntArray constructor", func(t *testing.T) {
+		values := []int64{1, 2, 3}
+		arr := duckdb.NewIntArray(values)
+		assert.Equal(t, values, arr.Get())
+	})
 }

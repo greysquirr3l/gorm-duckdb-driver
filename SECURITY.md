@@ -6,10 +6,11 @@ We actively maintain security updates for the following versions:
 
 | Version | Supported          | Go Version | Status | Notes |
 | ------- | ------------------ | ---------- | ------ | ----- |
+| 0.6.x   | :white_check_mark: | 1.24+      | Active | Native Array Support |
 | 0.5.x   | :white_check_mark: | 1.24+      | Active | 100% GORM Compliance |
-| 0.4.x   | :white_check_mark: | 1.24+      | Active | Advanced DuckDB Types |
+| 0.4.x   | :warning: Limited  | 1.24+      | Legacy | Advanced DuckDB Types |
 | 0.3.x   | :warning: Limited  | 1.24+      | Legacy | Extension Management |
-| 0.2.x   | :warning: Limited  | 1.24+      | Legacy | Basic Functionality |
+| 0.2.x   | :x:                | 1.24+      | EOL    | Basic Functionality |
 | 0.1.x   | :x:                | 1.21+      | EOL    | Deprecated |
 | < 0.1   | :x:                | N/A        | EOL    | Unsupported |
 
@@ -458,4 +459,4 @@ func auditGORMOperation(operation string, table string, user string) {
 - [GORM DuckDB Driver v0.5.2 Documentation](https://github.com/greysquirr3l/gorm-duckdb-driver)
 - [GitHub Security Advisory Database](https://github.com/advisories)
 
-**Last Updated**: August 2025 (v0.5.2 - 100% GORM Compliance Release)
+**Last Updated**: November 2025 (v0.6.1 - Native Array Support Release)

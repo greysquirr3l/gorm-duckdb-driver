@@ -10,40 +10,57 @@ import (
 	"time"
 )
 
+// Constants for repeated strings
+const (
+	nullValue    = "NULL"
+	emptyStruct  = "{}"
+	emptyMap     = "MAP {}"
+	pointGeom    = "POINT"
+	polygonGeom  = "POLYGON"
+	jsonType     = "JSON"
+)
+
 // ===== STRUCT TYPES =====
 
 // StructType represents a DuckDB STRUCT type - complex nested data with named fields
 type StructType map[string]interface{}
 
+// formatKeyValueForSQL formats a value for inclusion in SQL key-value pairs
+func formatKeyValueForSQL(value interface{}) (string, error) {
+	switch v := value.(type) {
+	case string:
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''")), nil
+	case int, int64, float64, float32:
+		return fmt.Sprintf("%v", v), nil
+	case bool:
+		return strconv.FormatBool(v), nil
+	case nil:
+		return nullValue, nil
+	default:
+		// Fallback to JSON encoding for complex types
+		jsonBytes, err := json.Marshal(v)
+		if err != nil {
+			return "", fmt.Errorf("failed to marshal value to JSON: %w", err)
+		}
+		return fmt.Sprintf("'%s'", strings.ReplaceAll(string(jsonBytes), "'", "''")), nil
+	}
+}
+
 // Value implements driver.Valuer interface for StructType
 func (s StructType) Value() (driver.Value, error) {
 	if s == nil {
-		return "NULL", nil
+		return nullValue, nil
 	}
 
 	if len(s) == 0 {
-		return "{}", nil
+		return emptyStruct, nil
 	}
 
-	var parts []string
+	parts := make([]string, 0, len(s))
 	for key, value := range s {
-		var valueStr string
-		switch v := value.(type) {
-		case string:
-			valueStr = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
-		case int, int64, float64, float32:
-			valueStr = fmt.Sprintf("%v", v)
-		case bool:
-			valueStr = strconv.FormatBool(v)
-		case nil:
-			valueStr = "NULL"
-		default:
-			// Fallback to JSON encoding for complex types
-			jsonBytes, err := json.Marshal(v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal struct field %s: %w", key, err)
-			}
-			valueStr = fmt.Sprintf("'%s'", strings.ReplaceAll(string(jsonBytes), "'", "''"))
+		valueStr, err := formatKeyValueForSQL(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal struct field %s: %w", key, err)
 		}
 		parts = append(parts, fmt.Sprintf("'%s': %s", key, valueStr))
 	}
@@ -83,7 +100,7 @@ func (s *StructType) Scan(value interface{}) error {
 
 func (s *StructType) scanFromString(str string) error {
 	str = strings.TrimSpace(str)
-	if str == "NULL" || str == "" {
+	if str == nullValue || str == "" {
 		*s = nil
 		return nil
 	}
@@ -137,31 +154,18 @@ type MapType map[string]interface{}
 // Value implements driver.Valuer interface for MapType
 func (m MapType) Value() (driver.Value, error) {
 	if m == nil {
-		return "MAP {}", nil
+		return emptyMap, nil
 	}
 
 	if len(m) == 0 {
-		return "MAP {}", nil
+		return emptyMap, nil
 	}
 
-	var pairs []string
+	pairs := make([]string, 0, len(m))
 	for key, value := range m {
-		var valueStr string
-		switch v := value.(type) {
-		case string:
-			valueStr = fmt.Sprintf("'%s'", strings.ReplaceAll(v, "'", "''"))
-		case int, int64, float64, float32:
-			valueStr = fmt.Sprintf("%v", v)
-		case bool:
-			valueStr = strconv.FormatBool(v)
-		case nil:
-			valueStr = "NULL"
-		default:
-			jsonBytes, err := json.Marshal(v)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal map value for key %s: %w", key, err)
-			}
-			valueStr = fmt.Sprintf("'%s'", strings.ReplaceAll(string(jsonBytes), "'", "''"))
+		valueStr, err := formatKeyValueForSQL(value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal map value for key %s: %w", key, err)
 		}
 		pairs = append(pairs, fmt.Sprintf("'%s': %s", key, valueStr))
 	}
@@ -200,7 +204,7 @@ func (m *MapType) Scan(value interface{}) error {
 
 func (m *MapType) scanFromString(str string) error {
 	str = strings.TrimSpace(str)
-	if str == "NULL" || str == "" || str == "MAP {}" {
+	if str == nullValue || str == "" || str == "MAP {}" {
 		*m = make(MapType)
 		return nil
 	}
@@ -334,7 +338,7 @@ func (l *ListType) scanFromString(str string) error {
 	}
 
 	// Try JSON parsing first
-	var result []interface{}
+	result := make([]interface{}, 0) // Pre-allocate slice
 	if err := json.Unmarshal([]byte("["+str+"]"), &result); err == nil {
 		*l = ListType(result)
 		return nil
@@ -415,7 +419,11 @@ func (d *DecimalType) Scan(value interface{}) error {
 
 // Float64 returns the decimal value as a float64 (may lose precision)
 func (d DecimalType) Float64() (float64, error) {
-	return strconv.ParseFloat(d.Data, 64)
+	val, err := strconv.ParseFloat(d.Data, 64)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse decimal %q as float64: %w", d.Data, err)
+	}
+	return val, nil
 }
 
 // String returns the string representation of the decimal
@@ -612,7 +620,7 @@ func NewUUID(uuid string) UUIDType {
 // Value implements driver.Valuer interface for UUIDType
 func (u UUIDType) Value() (driver.Value, error) {
 	if u.Data == "" {
-		return nil, nil
+		return "", nil // Return empty string instead of nil
 	}
 	return u.Data, nil
 }
@@ -720,7 +728,7 @@ func (j JSONType) String() string {
 
 // GormDataType implements the GormDataTypeInterface for JSONType
 func (JSONType) GormDataType() string {
-	return "JSON"
+	return jsonType
 }
 
 // ===== PHASE 3A: CORE ADVANCED TYPES FOR 100% DUCKDB UTILIZATION =====
@@ -744,7 +752,7 @@ func NewEnum(name string, values []string, selected string) ENUMType {
 // Value implements driver.Valuer interface for ENUMType
 func (e ENUMType) Value() (driver.Value, error) {
 	if e.Selected == "" {
-		return nil, nil
+		return "", nil // Return empty string instead of nil
 	}
 
 	// Validate that selected value is in allowed values
@@ -817,7 +825,7 @@ func NewUnion(types []string, value interface{}, typeName string) UNIONType {
 // Value implements driver.Valuer interface for UNIONType
 func (u UNIONType) Value() (driver.Value, error) {
 	if u.Data == nil {
-		return nil, nil
+		return "{}", nil // Return empty JSON object instead of nil
 	}
 
 	// Create union representation as JSON
@@ -893,7 +901,7 @@ func NewTimestampTZ(t time.Time, location *time.Location) TimestampTZType {
 // Value implements driver.Valuer interface for TimestampTZType
 func (t TimestampTZType) Value() (driver.Value, error) {
 	if t.Time.IsZero() {
-		return nil, nil
+		return "1970-01-01 00:00:00+00", nil // Return epoch time instead of nil
 	}
 
 	// Return timestamp in the specific timezone
@@ -981,7 +989,7 @@ func NewHugeInt(value interface{}) (HugeIntType, error) {
 // Value implements driver.Valuer interface for HugeIntType
 func (h HugeIntType) Value() (driver.Value, error) {
 	if h.Data == nil {
-		return nil, nil
+		return "0", nil // Return zero string instead of nil
 	}
 
 	return h.Data.String(), nil
@@ -1082,7 +1090,7 @@ func NewBitStringFromString(bitStr string, length int) (BitStringType, error) {
 // Value implements driver.Valuer interface for BitStringType
 func (b BitStringType) Value() (driver.Value, error) {
 	if len(b.Bits) == 0 {
-		return nil, nil
+		return "0", nil // Return zero bit instead of nil
 	}
 
 	// Convert bits to binary string representation
@@ -1222,7 +1230,7 @@ func NewBlob(data []byte, mimeType string) BLOBType {
 // Value implements driver.Valuer interface for BLOBType
 func (b BLOBType) Value() (driver.Value, error) {
 	if b.Data == nil {
-		return nil, nil
+		return []byte{}, nil // Return empty byte slice instead of nil
 	}
 
 	// DuckDB BLOB values are stored as byte arrays
@@ -1305,11 +1313,11 @@ func NewGeometry(wkt string, srid int) GEOMETRYType {
 
 	// Extract geometry type from WKT
 	if strings.HasPrefix(strings.ToUpper(wkt), "POINT") {
-		geomType = "POINT"
+		geomType = pointGeom
 	} else if strings.HasPrefix(strings.ToUpper(wkt), "LINESTRING") {
 		geomType = "LINESTRING"
 	} else if strings.HasPrefix(strings.ToUpper(wkt), "POLYGON") {
-		geomType = "POLYGON"
+		geomType = polygonGeom
 	} else if strings.HasPrefix(strings.ToUpper(wkt), "MULTIPOINT") {
 		geomType = "MULTIPOINT"
 	} else if strings.HasPrefix(strings.ToUpper(wkt), "MULTILINESTRING") {
@@ -1335,7 +1343,7 @@ func NewGeometry(wkt string, srid int) GEOMETRYType {
 // Value implements driver.Valuer interface for GEOMETRYType
 func (g GEOMETRYType) Value() (driver.Value, error) {
 	if g.WKT == "" {
-		return nil, nil
+		return "POINT EMPTY", nil // Return empty geometry instead of nil
 	}
 
 	// DuckDB GEOMETRY values can be stored as WKT strings
@@ -1497,7 +1505,10 @@ func (n *NestedArrayType) Scan(value interface{}) error {
 		return fmt.Errorf("cannot scan %T into NestedArrayType", value)
 	}
 
-	return json.Unmarshal([]byte(jsonStr), &n.Elements)
+	if err := json.Unmarshal([]byte(jsonStr), &n.Elements); err != nil {
+		return fmt.Errorf("failed to unmarshal nested array JSON: %w", err)
+	}
+	return nil
 }
 
 // Slice returns a slice of the array from start to end
@@ -1620,7 +1631,7 @@ func (q QueryHintType) ToSQL() string {
 
 // GormDataType implements the GormDataTypeInterface for QueryHintType
 func (QueryHintType) GormDataType() string {
-	return "JSON" // Store hints as JSON
+	return jsonType // Store hints as JSON
 }
 
 // ===== ADVANCED CONSTRAINT TYPES =====
@@ -1715,7 +1726,7 @@ func (c ConstraintType) ToSQL() string {
 
 // GormDataType implements the GormDataTypeInterface for ConstraintType
 func (ConstraintType) GormDataType() string {
-	return "JSON" // Store constraints as JSON
+	return jsonType // Store constraints as JSON
 }
 
 // ===== ANALYTICAL FUNCTIONS INTEGRATION =====
@@ -1827,7 +1838,7 @@ func (a AnalyticalFunctionType) ToSQL() string {
 
 // GormDataType implements the GormDataTypeInterface for AnalyticalFunctionType
 func (AnalyticalFunctionType) GormDataType() string {
-	return "JSON" // Store analytical functions as JSON
+	return jsonType // Store analytical functions as JSON
 }
 
 // ===== PERFORMANCE METRICS INTEGRATION =====
@@ -1875,7 +1886,10 @@ func (p *PerformanceMetricsType) Scan(value interface{}) error {
 		return fmt.Errorf("cannot scan %T into PerformanceMetricsType", value)
 	}
 
-	return json.Unmarshal([]byte(jsonStr), p)
+	if err := json.Unmarshal([]byte(jsonStr), p); err != nil {
+		return fmt.Errorf("failed to unmarshal performance metrics JSON: %w", err)
+	}
+	return nil
 }
 
 // AddMetric adds a custom performance metric
@@ -1907,5 +1921,5 @@ func (p PerformanceMetricsType) Summary() string {
 
 // GormDataType implements the GormDataTypeInterface for PerformanceMetricsType
 func (PerformanceMetricsType) GormDataType() string {
-	return "JSON" // Store performance metrics as JSON
+	return jsonType // Store performance metrics as JSON
 }

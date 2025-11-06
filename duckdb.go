@@ -9,7 +9,6 @@ import (
 	"os"
 	"reflect"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/marcboeker/go-duckdb/v2"
@@ -18,6 +17,13 @@ import (
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/migrator"
 	"gorm.io/gorm/schema"
+)
+
+// Constants for repeated strings
+const (
+	dataTypeText = "TEXT"
+	dataTypeBlob = "BLOB"
+	dataTypeJSON = "JSON"
 )
 
 var debugLogging = os.Getenv("GORM_DUCKDB_DEBUG") == "true" || os.Getenv("GORM_DUCKDB_DEBUG") == "1"
@@ -89,8 +95,6 @@ func init() {
 	sql.Register("duckdb-gorm", &convertingDriver{&duckdb.Driver{}})
 }
 
-var registerCallbacksOnce sync.Once
-
 // Custom driver that converts time pointers at the lowest level
 type convertingDriver struct {
 	driver.Driver
@@ -101,7 +105,7 @@ func (d *convertingDriver) Open(name string) (driver.Conn, error) {
 	conn, err := d.Driver.Open(name)
 	if err != nil {
 		debugLog(" convertingDriver.Open failed: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to open DuckDB connection with name %s: %w", name, err)
 	}
 	debugLog(" convertingDriver.Open succeeded, returning convertingConn")
 	return &convertingConn{conn}, nil
@@ -173,6 +177,7 @@ func (c *convertingConn) ExecContext(ctx context.Context, query string, args []d
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
+	// nolint:staticcheck // Using deprecated driver.Execer for backward compatibility
 	if exec, ok := c.Conn.(driver.Execer); ok {
 		result, err := exec.Exec(query, values)
 		if err != nil {
@@ -220,6 +225,7 @@ func (c *convertingConn) QueryContext(ctx context.Context, query string, args []
 	for i, arg := range args {
 		values[i] = arg.Value
 	}
+	// nolint:staticcheck // Using deprecated driver.Queryer for backward compatibility
 	if queryer, ok := c.Conn.(driver.Queryer); ok {
 		rows, err := queryer.Query(query, values)
 		if err != nil {
@@ -402,6 +408,18 @@ func (dialector Dialector) Initialize(db *gorm.DB) error {
 	}()
 
 	if !alreadyRegistered {
+		// Custom CREATE callback to work around GORM v1.31.1 issue where gorm:create
+		// doesn't generate INSERT SQL for DuckDB dialector
+		if err := db.Callback().Create().Replace("gorm:create", duckdbCreateCallback); err != nil {
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
+				return fmt.Errorf("failed to register custom create callback: %w", err)
+			}
+		} else {
+			debugLog(" Successfully registered custom CREATE callback to work around GORM issue")
+		}
+
+		// Temporarily disable other custom callbacks to test GORM's default behavior
+		/*
 		// Override the create callback to use RETURNING for auto-increment fields.
 		if err := db.Callback().Create().Before("gorm:create").Register("duckdb:before_create", beforeCreateCallback); err != nil {
 			// Ignore duplicate/already-registered errors
@@ -410,13 +428,21 @@ func (dialector Dialector) Initialize(db *gorm.DB) error {
 			}
 		}
 
-		// Replace the core create callback with our custom implementation. Replace may fail
-		// in some gorm versions if not available; tolerate errors that indicate prior registration.
-		if err := db.Callback().Create().Replace("gorm:create", createCallback); err != nil {
+		// Add an after-create callback to handle auto-increment ID retrieval
+		// instead of replacing the entire create callback
+		if err := db.Callback().Create().After("gorm:create").Register("duckdb:after_create", afterCreateCallback); err != nil {
 			if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
-				return fmt.Errorf("failed to replace create callback: %w", err)
+				return fmt.Errorf("failed to register after create callback: %w", err)
 			}
 		}
+
+		// Add a debug callback right after GORM's create to see what's happening
+		if err := db.Callback().Create().After("gorm:create").Before("duckdb:after_create").Register("duckdb:debug_create", debugCreateCallback); err != nil {
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
+				// Ignore duplicate errors for debug callback
+			}
+		}
+		*/
 
 		// Replace the row callback with our DuckDB-compatible version
 		// This is a workaround for a GORM bug where the default RowQuery callback
@@ -479,6 +505,7 @@ func (dialector Dialector) Migrator(db *gorm.DB) gorm.Migrator {
 }
 
 // DataTypeOf returns the SQL data type for a given field.
+// nolint:gocyclo // Complex type mapping function required for comprehensive DuckDB type support
 func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 	if field == nil {
 		return ""
@@ -531,11 +558,11 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 		if size > 0 && size < 65536 {
 			return fmt.Sprintf("VARCHAR(%d)", size)
 		}
-		return "TEXT"
+		return dataTypeText
 	case schema.Time:
 		return "TIMESTAMP"
 	case schema.Bytes:
-		return "BLOB"
+		return dataTypeBlob
 	}
 
 	// Handle advanced DuckDB types - Phase 2: 80% utilization achieved
@@ -556,7 +583,7 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 		case strings.Contains(typeName, "UUIDType"):
 			return "UUID"
 		case strings.Contains(typeName, "JSONType"):
-			return "JSON"
+			return dataTypeJSON
 		// Phase 3A: Core advanced types for 100% DuckDB utilization
 		case strings.Contains(typeName, "ENUMType"):
 			return "ENUM" // Will be expanded with enum definition
@@ -577,13 +604,13 @@ func (dialector Dialector) DataTypeOf(field *schema.Field) string {
 		case strings.Contains(typeName, "NestedArrayType"):
 			return "ARRAY" // Advanced nested arrays
 		case strings.Contains(typeName, "QueryHintType"):
-			return "TEXT" // Store as JSON text
+			return dataTypeJSON // Store as JSON text
 		case strings.Contains(typeName, "ConstraintType"):
-			return "TEXT" // Store as JSON text
+			return dataTypeJSON // Store as JSON text
 		case strings.Contains(typeName, "AnalyticalFunctionType"):
-			return "TEXT" // Store as JSON text
+			return dataTypeJSON // Store as JSON text
 		case strings.Contains(typeName, "PerformanceMetricsType"):
-			return "JSON" // Native JSON support
+			return dataTypeJSON // Native JSON support
 		}
 	}
 
@@ -697,108 +724,84 @@ func (dialector Dialector) Translate(err error) error {
 	return translator.Translate(err)
 }
 
+// debugCreateCallback logs what happened during GORM's create
+func debugCreateCallback(db *gorm.DB) {
+	debugLog(" debugCreateCallback: RowsAffected=%d, Error=%v", db.Statement.RowsAffected, db.Error)
+	debugLog(" debugCreateCallback: SQL=%s", db.Statement.SQL.String())
+	debugLog(" debugCreateCallback: Vars=%v", db.Statement.Vars)
+}
+
 // beforeCreateCallback prepares the statement for auto-increment handling
-func beforeCreateCallback(_ *gorm.DB) {
+func beforeCreateCallback(db *gorm.DB) {
+	debugLog(" beforeCreateCallback called")
+	debugLog(" beforeCreateCallback: Table=%s", db.Statement.Table)
+	if db.Statement.Schema != nil {
+		debugLog(" beforeCreateCallback: Schema.Table=%s", db.Statement.Schema.Table)
+		debugLog(" beforeCreateCallback: Schema.Fields count=%d", len(db.Statement.Schema.Fields))
+		for i, field := range db.Statement.Schema.Fields {
+			debugLog(" beforeCreateCallback: Field[%d]: Name=%s, DBName=%s, AutoIncrement=%t, PrimaryKey=%t", i, field.Name, field.DBName, field.AutoIncrement, field.PrimaryKey)
+		}
+	} else {
+		debugLog(" beforeCreateCallback: Schema is nil!")
+	}
+	debugLog(" beforeCreateCallback: ReflectValue=%+v", db.Statement.ReflectValue)
+	debugLog(" beforeCreateCallback: SQL before gorm:create=%s", db.Statement.SQL.String())
 	// Nothing special needed here, just ensuring the statement is prepared
 }
 
-// createCallback handles INSERT operations with RETURNING for auto-increment fields
-func createCallback(db *gorm.DB) {
+// afterCreateCallback handles auto-increment ID retrieval after GORM's create
+func afterCreateCallback(db *gorm.DB) {
+	debugLog(" afterCreateCallback called, RowsAffected: %d", db.Statement.RowsAffected)
 	if db.Error != nil {
+		debugLog(" afterCreateCallback: db.Error = %v", db.Error)
 		return
 	}
 
-	if db.Statement.Schema != nil {
-		var hasAutoIncrement bool
-		var autoIncrementField *schema.Field
-
-		// Check if we have auto-increment primary key
+	// Only try to get auto-increment ID if the create was successful
+	if db.Statement.RowsAffected > 0 && db.Statement.Schema != nil {
 		for _, field := range db.Statement.Schema.PrimaryFields {
 			if field.AutoIncrement {
-				hasAutoIncrement = true
-				autoIncrementField = field
-				break
-			}
-		}
-
-		if hasAutoIncrement {
-			// Build custom INSERT with RETURNING
-			sql, vars := buildInsertSQL(db, autoIncrementField)
-			if sql != "" {
-				// Execute with RETURNING to get the auto-generated ID
-				var id int64
-				// Check if there's an error in the query before trying to get the row
-				rawDB := db.Raw(sql, vars...)
-				if rawDB.Error != nil {
-					if addErr := db.AddError(rawDB.Error); addErr != nil {
-						return
-					}
-					return
-				}
-
-				// Use GORM's Scan to safely execute the query and avoid nil Row panics
-				rows, err := rawDB.Rows()
+				debugLog(" afterCreateCallback: Attempting to retrieve auto-increment ID for field: %s", field.Name)
+				
+				// For DuckDB, we need to get the current sequence value
+				// The sequence name follows the pattern: seq_{table_name}_{field_name}
+				tableName := db.Statement.Schema.Table
+				sequenceName := fmt.Sprintf("seq_%s_%s", tableName, field.DBName)
+				
+				var currentID int64
+				query := fmt.Sprintf("SELECT currval('%s')", sequenceName)
+				
+				err := db.Raw(query).Scan(&currentID).Error
 				if err != nil {
-					if addErr := db.AddError(err); addErr != nil {
-						return
-					}
+					debugLog(" afterCreateCallback: Failed to get sequence value: %v", err)
 					return
 				}
-				if rows == nil {
-					if addErr := db.AddError(fmt.Errorf("failed to execute returning insert: nil rows")); addErr != nil {
-						return
-					}
-					return
-				}
-				defer rows.Close()
-
-				if rows.Next() {
-					if err := rows.Scan(&id); err != nil {
-						if addErr := db.AddError(err); addErr != nil {
-							return
-						}
-						return
-					}
-				} else {
-					if addErr := db.AddError(fmt.Errorf("no rows returned from RETURNING query")); addErr != nil {
-						return
-					}
-					return
-				} // Set the ID in the model using GORM's ReflectValue
+				
+				debugLog(" afterCreateCallback: Retrieved ID: %d", currentID)
+				
+				// Set the ID in the model
 				if db.Statement.ReflectValue.IsValid() && db.Statement.ReflectValue.CanAddr() {
 					modelValue := db.Statement.ReflectValue
+					if modelValue.Kind() == reflect.Ptr {
+						modelValue = modelValue.Elem()
+					}
 
-					if idField := modelValue.FieldByName(autoIncrementField.Name); idField.IsValid() && idField.CanSet() {
-						// Handle different integer types
-						switch idField.Kind() {
-						case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-							if id >= 0 {
-								idField.SetUint(uint64(id))
+					if modelValue.Kind() == reflect.Struct {
+						idField := modelValue.FieldByName(field.Name)
+						if idField.IsValid() && idField.CanSet() {
+							switch idField.Kind() {
+							case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+								idField.SetUint(uint64(currentID))
+								debugLog(" afterCreateCallback: Set uint ID to %d", currentID)
+							case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+								idField.SetInt(currentID)
+								debugLog(" afterCreateCallback: Set int ID to %d", currentID)
 							}
-						case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-							idField.SetInt(id)
 						}
 					}
 				}
-
-				db.Statement.RowsAffected = 1
-				return
+				break // Only handle the first auto-increment field
 			}
-		}
-	}
-
-	// Fall back to default behavior for non-auto-increment cases
-	if db.Statement.SQL.String() == "" {
-		db.Statement.Build("INSERT")
-	}
-
-	if result, err := db.Statement.ConnPool.ExecContext(db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...); err != nil {
-		if addErr := db.AddError(err); addErr != nil {
-			return
-		}
-	} else {
-		if rows, _ := result.RowsAffected(); rows > 0 {
-			db.Statement.RowsAffected = rows
 		}
 	}
 }
@@ -855,14 +858,14 @@ func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []in
 func shouldApplyRowCallbackFix(db *gorm.DB) bool {
 	// Check if the dialector has a specific configuration
 	if dialector, ok := db.Dialector.(*Dialector); ok && dialector.Config != nil {
-		if dialector.Config.RowCallbackWorkaround != nil {
+		if dialector.RowCallbackWorkaround != nil {
 			// Use explicit configuration
-			if *dialector.Config.RowCallbackWorkaround {
+			if *dialector.RowCallbackWorkaround {
 				debugLog(" RowCallback workaround explicitly enabled via config")
 			} else {
 				debugLog(" RowCallback workaround explicitly disabled via config")
 			}
-			return *dialector.Config.RowCallbackWorkaround
+			return *dialector.RowCallbackWorkaround
 		}
 	}
 
@@ -883,39 +886,8 @@ func shouldApplyRowCallbackFix(db *gorm.DB) bool {
 	// return isRowCallbackBroken(db)
 
 	// Currently always apply fix since we know GORM v1.30.2 has the bug
-	debugLog(" Using default RowCallback workaround behavior (enabled)")
-	return true
-}
-
-// isRowCallbackBroken tests if GORM's default RowQuery callback works correctly
-// This is a runtime detection method for future use when we want to detect
-// if GORM has fixed the bug in newer versions
-func isRowCallbackBroken(db *gorm.DB) bool {
-	// Create a minimal test to check if RowQuery callback works
-	// This is disabled by default to avoid affecting initialization performance
-	defer func() {
-		if r := recover(); r != nil {
-			// If the test panics, assume the callback is broken
-			debugLog(" RowQuery callback test panicked, assuming bug exists: %v", r)
-		}
-	}()
-
-	// Use a session to avoid affecting the main DB state
-	testSession := db.Session(&gorm.Session{DryRun: false})
-
-	// Try a simple query that should always work
-	row := testSession.Raw("SELECT 1").Row()
-
-	// If row is nil, the callback is broken
-	isBroken := (row == nil)
-
-	if isBroken {
-		debugLog(" RowQuery callback test detected bug: Raw().Row() returned nil")
-	} else {
-		debugLog(" RowQuery callback test passed: Raw().Row() returned valid row")
-	}
-
-	return isBroken
+	debugLog(" Using default RowCallback workaround behavior (disabled for testing)")
+	return false
 }
 
 // rowQueryCallback replaces GORM's default row query callback with a DuckDB-compatible version
@@ -964,6 +936,155 @@ func rowQueryCallback(db *gorm.DB) {
 
 	// Set RowsAffected to -1 to indicate unknown row count for single row queries
 	db.RowsAffected = -1
+}
+
+// duckdbCreateCallback implements a custom CREATE callback to work around
+// GORM v1.31.1 issue where gorm:create doesn't generate INSERT SQL for DuckDB dialector
+func duckdbCreateCallback(db *gorm.DB) {
+	if db.Error != nil {
+		return
+	}
+
+	stmt := db.Statement
+	if stmt.Schema == nil {
+		db.Error = fmt.Errorf("schema is nil in CREATE callback")
+		return
+	}
+
+	debugLog("duckdbCreateCallback called")
+	debugLog("duckdbCreateCallback: building INSERT for table %s", stmt.Table)
+
+	// Build INSERT statement manually
+	var columns []string
+	var placeholders []string
+	var values []interface{}
+	var autoIncrementField *schema.Field
+
+	// Find auto-increment field and collect values
+	for _, field := range stmt.Schema.Fields {
+		if field.AutoIncrement {
+			autoIncrementField = field
+			debugLog("duckdbCreateCallback: skipping auto-increment field %s", field.Name)
+			continue
+		}
+
+		// Get field value from the model
+		fieldValue := stmt.ReflectValue
+		if fieldValue.Kind() == reflect.Ptr {
+			fieldValue = fieldValue.Elem()
+		}
+		
+		if fieldValue.Kind() == reflect.Struct {
+			modelFieldValue := fieldValue.FieldByName(field.Name)
+			if modelFieldValue.IsValid() {
+				columns = append(columns, fmt.Sprintf(`"%s"`, field.DBName))
+				placeholders = append(placeholders, "?")
+				values = append(values, modelFieldValue.Interface())
+				debugLog("duckdbCreateCallback: adding field %s = %v", field.DBName, modelFieldValue.Interface())
+			}
+		}
+	}
+
+	if len(columns) == 0 {
+		db.Error = fmt.Errorf("no fields to insert")
+		return
+	}
+
+	// Build SQL
+	sql := fmt.Sprintf(`INSERT INTO "%s" (%s) VALUES (%s)`,
+		stmt.Table,
+		strings.Join(columns, ", "),
+		strings.Join(placeholders, ", "))
+
+	// Add RETURNING clause for auto-increment fields
+	hasAutoIncrement := autoIncrementField != nil
+	if hasAutoIncrement {
+		sql += fmt.Sprintf(` RETURNING "%s"`, autoIncrementField.DBName)
+		debugLog("duckdbCreateCallback: adding RETURNING for field %s", autoIncrementField.DBName)
+	}
+
+	debugLog("duckdbCreateCallback: generated SQL: %s", sql)
+	debugLog("duckdbCreateCallback: vars: %+v", values)
+
+	// Execute the query
+	if hasAutoIncrement {
+		// Use QueryRow for RETURNING
+		var id interface{}
+		err := stmt.ConnPool.QueryRowContext(stmt.Context, sql, values...).Scan(&id)
+		if err != nil {
+			db.Error = err
+			debugLog("duckdbCreateCallback: QueryRow failed: %v", err)
+		} else {
+			db.RowsAffected = 1
+			debugLog("duckdbCreateCallback: QueryRow succeeded, ID: %v", id)
+			
+			// Set the ID back to the model
+			if autoIncrementField != nil {
+				// Get the struct value (dereference pointer if needed)
+				structValue := stmt.ReflectValue
+				if structValue.Kind() == reflect.Ptr {
+					structValue = structValue.Elem()
+				}
+				
+				fieldValue := structValue.FieldByName(autoIncrementField.Name)
+				debugLog("duckdbCreateCallback: Setting field %s, Valid: %t, CanSet: %t, Kind: %s", 
+					autoIncrementField.Name, fieldValue.IsValid(), fieldValue.CanSet(), fieldValue.Kind())
+				
+				if fieldValue.IsValid() && fieldValue.CanSet() {
+					debugLog("duckdbCreateCallback: ID value type: %T, value: %v", id, id)
+					switch fieldValue.Kind() {
+					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+						var uintVal uint64
+						switch v := id.(type) {
+						case uint64:
+							uintVal = v
+						case int64:
+							uintVal = uint64(v)
+						case int32:
+							uintVal = uint64(v)
+						case int:
+							uintVal = uint64(v)
+						default:
+							debugLog("duckdbCreateCallback: Could not convert ID %v (%T) to uint", id, id)
+							return
+						}
+						fieldValue.SetUint(uintVal)
+						debugLog("duckdbCreateCallback: Set uint field to %d", uintVal)
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+						var intVal int64
+						switch v := id.(type) {
+						case int64:
+							intVal = v
+						case uint64:
+							intVal = int64(v)
+						case int32:
+							intVal = int64(v)
+						case int:
+							intVal = int64(v)
+						default:
+							debugLog("duckdbCreateCallback: Could not convert ID %v (%T) to int", id, id)
+							return
+						}
+						fieldValue.SetInt(intVal)
+						debugLog("duckdbCreateCallback: Set int field to %d", intVal)
+					}
+				} else {
+					debugLog("duckdbCreateCallback: Cannot set field %s", autoIncrementField.Name)
+				}
+			}
+		}
+	} else {
+		// Use Exec for non-returning operations
+		result, err := stmt.ConnPool.ExecContext(stmt.Context, sql, values...)
+		if err != nil {
+			db.Error = err
+			debugLog("duckdbCreateCallback: Exec failed: %v", err)
+		} else {
+			affected, _ := result.RowsAffected()
+			db.RowsAffected = affected
+			debugLog("duckdbCreateCallback: Exec succeeded, rows affected: %d", affected)
+		}
+	}
 }
 
 // translateDriverError provides production-ready error translation for DuckDB driver errors

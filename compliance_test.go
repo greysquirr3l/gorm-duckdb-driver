@@ -2,6 +2,7 @@ package duckdb
 
 import (
 	"database/sql"
+	"errors"
 	"reflect"
 	"testing"
 
@@ -30,9 +31,7 @@ func TestGORMInterfaceCompliance(t *testing.T) {
 		}
 
 		// Test DataTypeOf with nil field (should handle gracefully)
-		if dataType := dialector.DataTypeOf(nil); dataType == "" {
-			// This is expected behavior for nil field
-		}
+		// DataTypeOf(nil) returns empty string - this is expected
 	})
 
 	// Test ErrorTranslator interface compliance
@@ -45,7 +44,7 @@ func TestGORMInterfaceCompliance(t *testing.T) {
 		// Test error translation
 		testErr := sql.ErrNoRows
 		translatedErr := errorTranslator.Translate(testErr)
-		if translatedErr != gorm.ErrRecordNotFound {
+		if !errors.Is(translatedErr, gorm.ErrRecordNotFound) {
 			t.Error("Should translate sql.ErrNoRows to gorm.ErrRecordNotFound")
 		}
 	})
@@ -127,7 +126,7 @@ func TestGORMInterfaceCompliance(t *testing.T) {
 			}
 
 			// Clean up
-			m.DropTable(&testStruct)
+			_ = m.DropTable(&testStruct) // Error ignored intentionally for cleanup
 		} else {
 			t.Logf("Skipping ColumnTypes and TableType tests - table was not created")
 		}
@@ -148,6 +147,7 @@ func TestGORMInterfaceCompliance(t *testing.T) {
 }
 
 // TestAdvancedMigratorFeatures tests advanced migrator features for 100% compliance
+// nolint:gocyclo // Comprehensive test function covering multiple migrator features
 func TestAdvancedMigratorFeatures(t *testing.T) {
 	db, err := gorm.Open(Open(":memory:"), &gorm.Config{})
 	if err != nil {
@@ -298,7 +298,7 @@ func TestAdvancedMigratorFeatures(t *testing.T) {
 	})
 
 	// Clean up
-	m.DropTable(&ComplexStruct{})
+	_ = m.DropTable(&ComplexStruct{}) // Error ignored intentionally for cleanup
 }
 
 // Test that our Migrator has all expected methods via reflection

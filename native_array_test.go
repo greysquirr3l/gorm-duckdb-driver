@@ -49,7 +49,6 @@ func TestNativeArraySupport(t *testing.T) {
 
 	// Test DuckDB native array support
 	t.Run("DuckDB Native Arrays", func(t *testing.T) {
-
 		// Test reading with Raw().Scan() using Composite wrapper
 		t.Run("Raw Scan with Composite", func(t *testing.T) {
 			var (
@@ -73,7 +72,7 @@ func TestNativeArraySupport(t *testing.T) {
 		t.Run("Multiple Rows", func(t *testing.T) {
 			rows, err := db.Raw("SELECT id, string_array, int_array, float_array FROM native_arrays ORDER BY id").Rows()
 			require.NoError(t, err)
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 
 			expectedStringArrays := [][3]string{
 				{"hello", "world", "test"},

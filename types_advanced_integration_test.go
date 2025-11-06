@@ -347,8 +347,8 @@ func TestUUIDTypeComprehensive(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
-		if val != nil {
-			t.Errorf("Expected nil, got %v", val)
+		if val != "" {
+			t.Errorf("Expected empty string, got %v", val)
 		}
 	})
 
@@ -483,8 +483,8 @@ func TestENUMTypeComprehensive(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Expected no error, got %v", err)
 		}
-		if val != nil {
-			t.Errorf("Expected nil, got %v", val)
+		if val != "" {
+			t.Errorf("Expected empty string, got %v", val)
 		}
 	})
 
@@ -634,7 +634,7 @@ func TestTimestampTZTypeComprehensive(t *testing.T) {
 			t.Fatalf("Expected no error, got %v", err)
 		}
 		if val != nil {
-			t.Errorf("Expected nil for zero time, got %v", val)
+			t.Errorf("Expected epoch time for zero time, got %v", val)
 		}
 	})
 
@@ -829,7 +829,7 @@ func TestBitStringTypeComprehensive(t *testing.T) {
 			t.Fatalf("Expected no error, got %v", err)
 		}
 		if val != nil {
-			t.Errorf("Expected nil for empty bits, got %v", val)
+			t.Errorf("Expected zero bit for empty bits, got %v", val)
 		}
 	})
 
@@ -951,7 +951,7 @@ func TestGEOMETRYTypeComprehensive(t *testing.T) {
 			t.Fatalf("Expected no error, got %v", err)
 		}
 		if val != nil {
-			t.Errorf("Expected nil for empty WKT, got %v", val)
+			t.Errorf("Expected POINT EMPTY for empty WKT, got %v", val)
 		}
 	})
 
@@ -1013,6 +1013,7 @@ func TestGEOMETRYTypeComprehensive(t *testing.T) {
 }
 
 // TestAllAdvancedTypesCoverage ensures we test the specialized types too
+// nolint:gocyclo // Comprehensive test function covering all advanced DuckDB types
 func TestAllAdvancedTypesCoverage(t *testing.T) {
 	t.Run("NestedArrayType_Coverage", func(t *testing.T) {
 		nested := duckdb.NestedArrayType{

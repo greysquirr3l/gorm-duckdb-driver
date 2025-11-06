@@ -31,7 +31,7 @@ func CustomRowQuery(db *gorm.DB) {
 		} else {
 			debugLog(" isRows=false or not found, calling QueryRowContext")
 			debugLog(" SQL: %s", db.Statement.SQL.String())
-			debugLog(" Vars: %v", db.Statement.Vars)
+			debugLog(" Vars: %v", db.Statement.Vars...)
 			debugLog(" ConnPool type: %T", db.Statement.ConnPool)
 
 			result := db.Statement.ConnPool.QueryRowContext(db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...)

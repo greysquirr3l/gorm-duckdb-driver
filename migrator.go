@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"reflect"
@@ -13,12 +14,18 @@ import (
 	"gorm.io/gorm/schema"
 )
 
+// Constants for repeated strings
+const (
+	schemaMain        = "main"
+	notNullConstraint = " NOT NULL"
+)
+
 // normalizeTable splits and strips quotes from a table identifier which may be
 // schema-qualified (e.g. "schema"."table" or schema.table). Returns schema
 // (may be empty) and table name.
-func normalizeTable(table string) (string, string) {
+func normalizeTable(table string) string {
 	if table == "" {
-		return "", ""
+		return ""
 	}
 	// Remove escaped quotes/backticks
 	t := strings.ReplaceAll(table, `\"`, "")
@@ -26,38 +33,9 @@ func normalizeTable(table string) (string, string) {
 	t = strings.ReplaceAll(t, `"`, "")
 	t = strings.Trim(t, "`\"")
 	if parts := strings.SplitN(t, ".", 2); len(parts) == 2 {
-		return strings.Trim(parts[0], "`\""), strings.Trim(parts[1], "`\"")
+		return strings.Trim(parts[1], "`\"")
 	}
-	return "", t
-}
-
-// resolveTableName attempts to determine the table identifier for a given value
-// using the provided statement if available, falling back to parsing the model
-// value or using the current DB statement.
-func (m Migrator) resolveTableName(value interface{}, stmt *gorm.Statement) string {
-	if stmt != nil {
-		if stmt.Schema != nil && stmt.Schema.Table != "" {
-			return stmt.Schema.Table
-		}
-		if stmt.Table != "" {
-			return stmt.Table
-		}
-	}
-
-	// Try to parse the model value to obtain schema information
-	if value != nil {
-		s := &gorm.Statement{DB: m.DB}
-		if err := s.Parse(value); err == nil && s.Schema != nil && s.Schema.Table != "" {
-			return s.Schema.Table
-		}
-	}
-
-	// Fallback to DB.Statement if present
-	if m.DB != nil && m.DB.Statement != nil && m.DB.Statement.Table != "" {
-		return m.DB.Statement.Table
-	}
-
-	return ""
+	return t
 }
 
 const (
@@ -89,14 +67,14 @@ func (m Migrator) isAutoIncrementField(field *schema.Field) bool {
 // CurrentDatabase returns the current database name.
 func (m Migrator) CurrentDatabase() (name string) {
 	if m.DB == nil {
-		return "main"
+		return schemaMain
 	}
 	row := m.DB.Raw("SELECT current_database()").Row()
 	if row == nil {
-		return "main"
+		return schemaMain
 	}
 	if err := row.Scan(&name); err != nil {
-		return "main"
+		return schemaMain
 	}
 	return
 }
@@ -140,7 +118,7 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 		}
 
 		// Add NOT NULL for primary keys
-		expr.SQL += " NOT NULL"
+		expr.SQL += notNullConstraint
 
 		// Do NOT add PRIMARY KEY here - let GORM handle it in the table definition
 		return expr
@@ -148,7 +126,7 @@ func (m Migrator) FullDataTypeOf(field *schema.Field) clause.Expr {
 
 	// For non-primary key fields, add constraints
 	if field.NotNull {
-		expr.SQL += " NOT NULL"
+		expr.SQL += notNullConstraint
 	}
 
 	if field.Unique {
@@ -284,21 +262,21 @@ func (m Migrator) HasTable(value interface{}) bool {
 		}
 
 		// Normalize table identifier to handle quoted and schema-qualified names
-		_, tableName := normalizeTable(tableIdentifier)
+		tableName := normalizeTable(tableIdentifier)
 		rows, err := m.DB.Raw(
 			"SELECT count(*) FROM information_schema.tables WHERE lower(table_name) = lower(?) AND table_type = 'BASE TABLE'",
 			tableName,
 		).Rows()
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to query table existence for %s: %w", tableName, err)
 		}
 		if rows == nil {
 			return fmt.Errorf("rows is nil for table existence query")
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if rows.Next() {
 			if err := rows.Scan(&count); err != nil {
-				return err
+				return fmt.Errorf("failed to scan table count: %w", err)
 			}
 		}
 		return nil
@@ -313,12 +291,12 @@ func (m Migrator) GetTables() (tableList []string, err error) {
 		"SELECT table_name FROM information_schema.tables WHERE table_type = 'BASE TABLE'",
 	).Rows()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query information_schema tables: %w", err)
 	}
 	if rows == nil {
 		return nil, nil
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	for rows.Next() {
 		var name string
@@ -349,7 +327,7 @@ func (m Migrator) HasColumn(value interface{}, field string) bool {
 		} else {
 			tableIdentifier = fmt.Sprint(m.CurrentTable(stmt))
 		}
-		_, tableName := normalizeTable(tableIdentifier)
+		tableName := normalizeTable(tableIdentifier)
 		rows, err := m.DB.Raw(
 			"SELECT count(*) FROM information_schema.columns WHERE lower(table_name) = lower(?) AND lower(column_name) = lower(?)",
 			tableName, name,
@@ -360,7 +338,7 @@ func (m Migrator) HasColumn(value interface{}, field string) bool {
 		if rows == nil {
 			return nil
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if rows.Next() {
 			if err := rows.Scan(&count); err != nil {
 				return nil
@@ -390,7 +368,7 @@ func (m Migrator) HasIndex(value interface{}, name string) bool {
 		} else {
 			tableIdentifier = fmt.Sprint(m.CurrentTable(stmt))
 		}
-		_, tableName := normalizeTable(tableIdentifier)
+		tableName := normalizeTable(tableIdentifier)
 		rows, err := m.DB.Raw(
 			"SELECT count(*) FROM information_schema.statistics WHERE lower(table_name) = lower(?) AND lower(index_name) = lower(?)",
 			tableName, name,
@@ -401,7 +379,7 @@ func (m Migrator) HasIndex(value interface{}, name string) bool {
 		if rows == nil {
 			return nil
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if rows.Next() {
 			if err := rows.Scan(&count); err != nil {
 				return nil
@@ -429,7 +407,7 @@ func (m Migrator) HasConstraint(value interface{}, name string) bool {
 		} else {
 			tableIdentifier = fmt.Sprint(m.CurrentTable(stmt))
 		}
-		_, tableName := normalizeTable(tableIdentifier)
+		tableName := normalizeTable(tableIdentifier)
 
 		rows, err := m.DB.Raw(
 			"SELECT count(*) FROM information_schema.table_constraints WHERE lower(table_name) = lower(?) AND lower(constraint_name) = lower(?)",
@@ -441,7 +419,7 @@ func (m Migrator) HasConstraint(value interface{}, name string) bool {
 		if rows == nil {
 			return nil
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		if rows.Next() {
 			if err := rows.Scan(&count); err != nil {
 				return nil
@@ -538,7 +516,7 @@ func (m Migrator) ColumnTypes(value interface{}) ([]gorm.ColumnType, error) {
 		}
 
 		// Normalize the table identifier
-		_, tableName := normalizeTable(tableIdentifier)
+		tableName := normalizeTable(tableIdentifier)
 
 		// Build query for this table
 		query := `
@@ -582,12 +560,12 @@ func (m Migrator) ColumnTypes(value interface{}) ([]gorm.ColumnType, error) {
 		rows, err := m.DB.Raw(query, args...).Rows()
 
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to execute foreign key check query: %w", err)
 		}
 		if rows == nil {
 			return nil
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var found int
 		for rows.Next() {
@@ -659,7 +637,10 @@ func (m Migrator) ColumnTypes(value interface{}) ([]gorm.ColumnType, error) {
 		return rows.Err()
 	})
 
-	return columnTypes, err
+	if err != nil {
+		return columnTypes, fmt.Errorf("failed to get column types: %w", err)
+	}
+	return columnTypes, nil
 }
 
 // TableType returns comprehensive table type information
@@ -685,7 +666,7 @@ func (m Migrator) TableType(value interface{}) (gorm.TableType, error) {
 		if rows == nil {
 			return nil
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		for rows.Next() {
 			var schemaName, tableName, tableTypeStr, tableComment string
@@ -707,14 +688,20 @@ func (m Migrator) TableType(value interface{}) (gorm.TableType, error) {
 	})
 
 	if result == nil {
-		return nil, err
+		if err != nil {
+			return nil, fmt.Errorf("failed to get table type information: %w", err)
+		}
+		return nil, fmt.Errorf("table type not found")
 	}
 
-	return result, err
+	if err != nil {
+		return result, fmt.Errorf("failed to get table type information: %w", err)
+	}
+	return result, nil
 }
 
-// DuckDBIndex implements gorm.Index interface for DuckDB
-type DuckDBIndex struct {
+// Index represents a database index with its properties.
+type Index struct {
 	TableName   string
 	IndexName   string
 	ColumnNames []string
@@ -723,27 +710,33 @@ type DuckDBIndex struct {
 	Options     string
 }
 
-func (idx DuckDBIndex) Table() string {
+// Table returns the table name for the index.
+func (idx Index) Table() string {
 	return idx.TableName
 }
 
-func (idx DuckDBIndex) Name() string {
+// Name returns the name of the index.
+func (idx Index) Name() string {
 	return idx.IndexName
 }
 
-func (idx DuckDBIndex) Columns() []string {
+// Columns returns the columns that make up the index.
+func (idx Index) Columns() []string {
 	return idx.ColumnNames
 }
 
-func (idx DuckDBIndex) PrimaryKey() (isPrimaryKey bool, ok bool) {
+// PrimaryKey returns whether this index is a primary key.
+func (idx Index) PrimaryKey() (isPrimaryKey bool, ok bool) {
 	return idx.IsPrimary, true
 }
 
-func (idx DuckDBIndex) Unique() (unique bool, ok bool) {
+// Unique returns whether this index enforces uniqueness.
+func (idx Index) Unique() (unique bool, ok bool) {
 	return idx.IsUnique, true
 }
 
-func (idx DuckDBIndex) Option() string {
+// Option returns additional options for the index.
+func (idx Index) Option() string {
 	return idx.Options
 }
 
@@ -751,13 +744,16 @@ func (idx DuckDBIndex) Option() string {
 func (m Migrator) GetIndexes(value interface{}) ([]gorm.Index, error) {
 	var indexes []gorm.Index
 
-	err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
+	err := m.RunWithValue(value, func(_ *gorm.Statement) error {
 		// DuckDB may not have complete information_schema.statistics support
 		// For now, return empty indexes to avoid errors
 		return nil
 	})
 
-	return indexes, err
+	if err != nil {
+		return nil, fmt.Errorf("failed to get indexes: %w", err)
+	}
+	return indexes, nil
 }
 
 // BuildIndexOptions builds index options for DuckDB
@@ -786,7 +782,6 @@ func (m Migrator) BuildIndexOptions(opts []schema.IndexOption, stmt *gorm.Statem
 func (m Migrator) CreateTable(values ...interface{}) error {
 	for _, value := range values {
 		if err := m.RunWithValue(value, func(stmt *gorm.Statement) error {
-
 			// Get the underlying SQL database connection
 			sqlDB, err := m.DB.DB()
 			if err != nil {
@@ -798,8 +793,8 @@ func (m Migrator) CreateTable(values ...interface{}) error {
 				for _, field := range stmt.Schema.Fields {
 					if field.PrimaryKey && (field.AutoIncrement || (!field.HasDefaultValue && field.DataType == schema.Uint)) {
 						sequenceName := "seq_" + strings.ToLower(stmt.Schema.Table) + "_" + strings.ToLower(field.DBName)
-						createSeqSQL := fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s START 1", sequenceName)
-						_, err := sqlDB.Exec(createSeqSQL)
+					createSeqSQL := fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s START 1", sequenceName)
+					_, err := sqlDB.ExecContext(context.Background(), createSeqSQL)
 						if err != nil {
 							// Ignore "already exists" errors
 							if !isAlreadyExistsError(err) {
@@ -856,7 +851,7 @@ func (m Migrator) CreateTable(values ...interface{}) error {
 			createSQL += ")"
 
 			// Step 3: Execute CREATE TABLE using the underlying SQL connection
-			_, err = sqlDB.Exec(createSQL)
+			_, err = sqlDB.ExecContext(context.Background(), createSQL)
 			if err != nil {
 				return fmt.Errorf("failed to create table %s: %w", tableName, err)
 			}

@@ -193,7 +193,9 @@ func TestMigrator_AddColumn(t *testing.T) {
 	require.NoError(t, err)
 
 	// Add a new column
-	err = migrator.AddColumn(&TestUser{}, "new_column")
+	if err = migrator.AddColumn(&TestUser{}, "new_column"); err != nil {
+		t.Logf("AddColumn error (expected): %v", err)
+	}
 	// Note: This might fail since the field doesn't exist in the struct
 	// but we're testing that the method doesn't panic
 	// The actual implementation should handle missing fields gracefully

@@ -2,6 +2,7 @@ package duckdb
 
 import (
 	"testing"
+
 	"gorm.io/gorm"
 )
 
@@ -131,7 +132,7 @@ func TestWorkaroundCompatibility(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to get rows: %v", err)
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 
 		var count int
 		for rows.Next() {

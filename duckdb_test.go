@@ -25,7 +25,7 @@ type User struct {
 func setupTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	dialector := duckdb.Open(":memory:")
+	dialector := duckdb.OpenWithRowCallbackWorkaround(":memory:", false)
 	db, err := gorm.Open(dialector, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})

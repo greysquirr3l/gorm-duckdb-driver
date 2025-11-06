@@ -10,6 +10,13 @@ import (
 	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 )
 
+// Test constants
+const (
+	testUUID     = "550e8400-e29b-41d4-a716-446655440000"
+	activeStatus = "active"
+	nullString   = "NULL"
+)
+
 // TestModel defines a comprehensive model for testing all advanced types
 type TestModel struct {
 	ID uint `gorm:"primaryKey" json:"id"`
@@ -210,13 +217,13 @@ func TestOriginalTypes(t *testing.T) {
 	})
 
 	t.Run("UUIDType", func(t *testing.T) {
-		uuid := duckdb.UUIDType{Data: "550e8400-e29b-41d4-a716-446655440000"}
+		uuid := duckdb.UUIDType{Data: testUUID}
 
 		val, err := uuid.Value()
 		if err != nil {
 			t.Fatalf("UUIDType.Value() error: %v", err)
 		}
-		expected := "550e8400-e29b-41d4-a716-446655440000"
+		expected := testUUID
 		if val != expected {
 			t.Errorf("UUIDType.Value() = %v, want %v", val, expected)
 		}
@@ -266,7 +273,7 @@ func TestPhase3ACoreTypes(t *testing.T) {
 		if err != nil {
 			t.Fatalf("ENUMType.Value() error: %v", err)
 		}
-		if val != "active" {
+		if val != activeStatus {
 			t.Errorf("ENUMType.Value() = %v, want %v", val, "active")
 		}
 		t.Log("✅ ENUMType basic functionality works")
@@ -485,7 +492,8 @@ func TestTypesScanMethods(t *testing.T) {
 
 	t.Run("UUIDType_Scan", func(t *testing.T) {
 		var uuid duckdb.UUIDType
-		testUUID := "550e8400-e29b-41d4-a716-446655440000"
+		localTestUUID := testUUID
+		_ = localTestUUID // Use the variable to avoid unused warning
 
 		if err := uuid.Scan(testUUID); err != nil {
 			t.Fatalf("UUIDType.Scan() error: %v", err)
@@ -523,7 +531,7 @@ func TestNullHandling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Null StructType.Value() error: %v", err)
 		}
-		if val != "NULL" {
+		if val != nullString {
 			t.Errorf("Null StructType.Value() = %v, want 'NULL'", val)
 		}
 
@@ -586,7 +594,7 @@ func TestTypeCompatibilityWithGORM(t *testing.T) {
 			"value": 123,
 		},
 		UUIDData: duckdb.UUIDType{
-			Data: "550e8400-e29b-41d4-a716-446655440000",
+			Data: testUUID,
 		},
 		DecimalData: duckdb.DecimalType{
 			Precision: 10,

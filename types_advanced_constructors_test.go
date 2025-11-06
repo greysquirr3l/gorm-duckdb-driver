@@ -53,11 +53,11 @@ func TestNewInterval_ZeroCoverage(t *testing.T) {
 	}
 }
 
-func TestInterval_fromDuration_ZeroCoverage(t *testing.T) {
+func TestInterval_fromDuration_ZeroCoverage(_ *testing.T) {
 	// Test fromDuration method which has 0% coverage
 	interval := NewInterval(0, 0, 0, 0, 0, 0, 0)
 	// This method should not panic
-	interval.fromDuration(time.Hour * 2)
+	_ = interval.fromDuration(time.Hour * 2) // Error ignored intentionally
 	// Verify conversion happened (hours should be updated)
 }
 
@@ -214,7 +214,7 @@ func TestGEOMETRY_IsEmpty_ZeroCoverage(t *testing.T) {
 	}
 }
 
-func TestGEOMETRY_GetBounds_ZeroCoverage(t *testing.T) {
+func TestGEOMETRY_GetBounds_ZeroCoverage(_ *testing.T) {
 	// Test GetBounds method which has 0% coverage
 	geom := &GEOMETRYType{WKT: "POINT(1 2)"}
 	bounds := geom.GetBounds()
@@ -222,7 +222,7 @@ func TestGEOMETRY_GetBounds_ZeroCoverage(t *testing.T) {
 	_ = bounds
 }
 
-func TestGEOMETRY_IsPoint_ZeroCoverage(t *testing.T) {
+func TestGEOMETRY_IsPoint_ZeroCoverage(_ *testing.T) {
 	// Test IsPoint method which has 0% coverage
 	pointGeom := &GEOMETRYType{WKT: "POINT(1 2)"}
 	result := pointGeom.IsPoint()
@@ -235,7 +235,7 @@ func TestGEOMETRY_IsPoint_ZeroCoverage(t *testing.T) {
 	_ = result2
 }
 
-func TestGEOMETRY_IsPolygon_ZeroCoverage(t *testing.T) {
+func TestGEOMETRY_IsPolygon_ZeroCoverage(_ *testing.T) {
 	// Test IsPolygon method which has 0% coverage
 	polygonGeom := &GEOMETRYType{WKT: "POLYGON((0 0, 1 0, 1 1, 0 1, 0 0))"}
 	result := polygonGeom.IsPolygon()
@@ -248,7 +248,7 @@ func TestGEOMETRY_IsPolygon_ZeroCoverage(t *testing.T) {
 	_ = result2
 }
 
-func TestGEOMETRY_SetProperty_ZeroCoverage(t *testing.T) {
+func TestGEOMETRY_SetProperty_ZeroCoverage(_ *testing.T) {
 	// Test SetProperty method which has 0% coverage
 	geom := &GEOMETRYType{WKT: "POINT(1 2)"}
 	// Should not panic
@@ -311,7 +311,7 @@ func TestNewQueryHint_ZeroCoverage(t *testing.T) {
 	}
 }
 
-func TestQueryHint_ToSQL_ZeroCoverage(t *testing.T) {
+func TestQueryHint_ToSQL_ZeroCoverage(_ *testing.T) {
 	// Test ToSQL method which has 0% coverage
 	options := map[string]interface{}{"index": "idx_name"}
 	hint := NewQueryHint("USE_INDEX", options)

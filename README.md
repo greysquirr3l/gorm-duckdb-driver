@@ -123,6 +123,7 @@ counts := result.ViewCounts.Get()     // Returns []int64
 The driver supports 19 advanced DuckDB types for comprehensive analytical capabilities:
 
 ### Core Types
+
 - **Arrays**: StringArray, IntArray, FloatArray with native `Composite[T]` support
 - **JSON/Document**: JSONType for flexible document storage
 - **Precision Math**: DecimalType, HugeIntType (128-bit integers)
@@ -130,6 +131,7 @@ The driver supports 19 advanced DuckDB types for comprehensive analytical capabi
 - **Identifiers**: UUIDType for unique identifiers
 
 ### Advanced Types
+
 - **Structured Data**: StructType, MapType, ListType for complex hierarchies
 - **Variants**: ENUMType, UNIONType for type-safe variants
 - **Binary**: BLOBType, BitStringType for binary data
@@ -137,6 +139,7 @@ The driver supports 19 advanced DuckDB types for comprehensive analytical capabi
 - **Performance**: QueryHintType, PerformanceMetricsType for optimization
 
 ### Usage Example
+
 ```go
 type AdvancedModel struct {
     ID        uint                `gorm:"primaryKey"`

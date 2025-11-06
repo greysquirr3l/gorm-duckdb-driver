@@ -418,6 +418,16 @@ func (dialector Dialector) Initialize(db *gorm.DB) error {
 			debugLog(" Successfully registered custom CREATE callback to work around GORM issue")
 		}
 
+		// Custom QUERY callback to work around GORM v1.31.1 issue where gorm:query
+		// doesn't generate SELECT SQL for DuckDB dialector
+		if err := db.Callback().Query().Replace("gorm:query", duckdbQueryCallback); err != nil {
+			if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
+				return fmt.Errorf("failed to register custom query callback: %w", err)
+			}
+		} else {
+			debugLog(" Successfully registered custom QUERY callback to work around GORM issue")
+		}
+
 		// Temporarily disable other custom callbacks to test GORM's default behavior
 		/*
 		// Override the create callback to use RETURNING for auto-increment fields.
@@ -886,8 +896,8 @@ func shouldApplyRowCallbackFix(db *gorm.DB) bool {
 	// return isRowCallbackBroken(db)
 
 	// Currently always apply fix since we know GORM v1.30.2 has the bug
-	debugLog(" Using default RowCallback workaround behavior (disabled for testing)")
-	return false
+	debugLog(" Using default RowCallback workaround behavior (enabled for working SELECT operations)")
+	return true
 }
 
 // rowQueryCallback replaces GORM's default row query callback with a DuckDB-compatible version
@@ -1084,6 +1094,90 @@ func duckdbCreateCallback(db *gorm.DB) {
 			db.RowsAffected = affected
 			debugLog("duckdbCreateCallback: Exec succeeded, rows affected: %d", affected)
 		}
+	}
+}
+
+// duckdbQueryCallback implements a custom QUERY callback to work around
+// GORM v1.31.1 issue where gorm:query doesn't generate SELECT SQL for DuckDB dialector
+func duckdbQueryCallback(db *gorm.DB) {
+	debugLog("duckdbQueryCallback called")
+	
+	if db.Error != nil {
+		debugLog("duckdbQueryCallback: early exit due to existing error: %v", db.Error)
+		return
+	}
+
+	// Try GORM's standard build first
+	if db.Statement.SQL.String() == "" {
+		debugLog("duckdbQueryCallback: trying GORM's standard Build()")
+		db.Statement.Build("SELECT", "FROM", "WHERE", "GROUP BY", "ORDER BY", "LIMIT", "FOR")
+	}
+
+	// If GORM's build failed or produced incomplete SQL, build manually
+	if db.Statement.SQL.String() == "" || !strings.Contains(db.Statement.SQL.String(), "SELECT") {
+		debugLog("duckdbQueryCallback: GORM Build failed, building SELECT manually")
+		
+		// Build SELECT clause manually
+		selectSQL := "SELECT "
+		if db.Statement.Schema != nil && len(db.Statement.Schema.Fields) > 0 {
+			var fields []string
+			for _, field := range db.Statement.Schema.Fields {
+				if field.DBName != "" {
+					quotedField := fmt.Sprintf(`"%s"."%s"`, db.Statement.Table, field.DBName)
+					fields = append(fields, quotedField)
+				}
+			}
+			selectSQL += strings.Join(fields, ", ")
+		} else {
+			selectSQL += "*"
+		}
+		
+		// Add FROM clause
+		fromSQL := fmt.Sprintf(` FROM "%s"`, db.Statement.Table)
+		
+		// Build complete SQL
+		completeSQL := selectSQL + fromSQL
+		
+		// Add WHERE clause if exists
+		if len(db.Statement.Clauses) > 0 {
+			// Try to build WHERE clause
+			db.Statement.SQL.Reset()
+			db.Statement.Build("WHERE")
+			if whereSQL := db.Statement.SQL.String(); whereSQL != "" {
+				completeSQL += " " + whereSQL
+			}
+		}
+		
+		// Add ORDER BY and LIMIT if present (from First() calls)
+		db.Statement.SQL.Reset()
+		db.Statement.Build("ORDER BY", "LIMIT")
+		if orderLimitSQL := db.Statement.SQL.String(); orderLimitSQL != "" {
+			completeSQL += " " + orderLimitSQL
+		}
+		
+		// Set the complete SQL
+		db.Statement.SQL.Reset()
+		db.Statement.SQL.WriteString(completeSQL)
+		
+		debugLog("duckdbQueryCallback: manually built SQL: %s", db.Statement.SQL.String())
+		debugLog("duckdbQueryCallback: vars: %v", db.Statement.Vars)
+	} else {
+		debugLog("duckdbQueryCallback: GORM Build succeeded: %s", db.Statement.SQL.String())
+	}
+
+	// Execute the query
+	if db.Statement.SQL.String() == "" {
+		debugLog("duckdbQueryCallback: ERROR - final SQL is still empty")
+		return
+	}
+
+	if rows, err := db.Statement.ConnPool.QueryContext(db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...); err != nil {
+		debugLog("duckdbQueryCallback: query failed: %v", err)
+		db.AddError(err)
+	} else {
+		debugLog("duckdbQueryCallback: query succeeded, scanning rows")
+		defer rows.Close()
+		gorm.Scan(rows, db, 0)
 	}
 }
 

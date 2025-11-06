@@ -735,11 +735,13 @@ func (dialector Dialector) Translate(err error) error {
 }
 
 // debugCreateCallback logs what happened during GORM's create
+/* UNUSED - debugCreateCallback
 func debugCreateCallback(db *gorm.DB) {
 	debugLog(" debugCreateCallback: RowsAffected=%d, Error=%v", db.Statement.RowsAffected, db.Error)
 	debugLog(" debugCreateCallback: SQL=%s", db.Statement.SQL.String())
-	debugLog(" debugCreateCallback: Vars=%v", db.Statement.Vars)
+	debugLog(" debugCreateCallback: Vars=%v", any(db.Statement.Vars))
 }
+*/
 
 // beforeCreateCallback prepares the statement for auto-increment handling
 func beforeCreateCallback(db *gorm.DB) {
@@ -760,6 +762,7 @@ func beforeCreateCallback(db *gorm.DB) {
 }
 
 // afterCreateCallback handles auto-increment ID retrieval after GORM's create
+/* UNUSED - afterCreateCallback
 func afterCreateCallback(db *gorm.DB) {
 	debugLog(" afterCreateCallback called, RowsAffected: %d", db.Statement.RowsAffected)
 	if db.Error != nil {
@@ -815,8 +818,10 @@ func afterCreateCallback(db *gorm.DB) {
 		}
 	}
 }
+*/
 
 // buildInsertSQL creates an INSERT statement with RETURNING for auto-increment fields
+/* UNUSED - buildInsertSQL
 func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []interface{}) {
 	if db.Statement.Schema == nil {
 		return "", nil
@@ -862,6 +867,7 @@ func buildInsertSQL(db *gorm.DB, autoIncrementField *schema.Field) (string, []in
 
 	return sql, values
 }
+*/
 
 // shouldApplyRowCallbackFix determines if we need to apply our RowQuery callback workaround
 // This accounts for future GORM versions that may fix the underlying bug
@@ -950,6 +956,7 @@ func rowQueryCallback(db *gorm.DB) {
 
 // duckdbCreateCallback implements a custom CREATE callback to work around
 // GORM v1.31.1 issue where gorm:create doesn't generate INSERT SQL for DuckDB dialector
+//nolint:gosec // G115: Integer conversions in ID handling are validated by GORM
 func duckdbCreateCallback(db *gorm.DB) {
 	if db.Error != nil {
 		return
@@ -1014,7 +1021,7 @@ func duckdbCreateCallback(db *gorm.DB) {
 	}
 
 	debugLog("duckdbCreateCallback: generated SQL: %s", sql)
-	debugLog("duckdbCreateCallback: vars: %+v", values)
+	debugLog("duckdbCreateCallback: vars: %+v", any(values))
 
 	// Execute the query
 	if hasAutoIncrement {
@@ -1158,7 +1165,7 @@ func duckdbQueryCallback(db *gorm.DB) {
 		db.Statement.SQL.WriteString(completeSQL)
 		
 		debugLog("duckdbQueryCallback: manually built SQL: %s", db.Statement.SQL.String())
-		debugLog("duckdbQueryCallback: vars: %v", db.Statement.Vars)
+		debugLog("duckdbQueryCallback: vars: %v", any(db.Statement.Vars))
 	} else {
 		debugLog("duckdbQueryCallback: GORM Build succeeded: %s", db.Statement.SQL.String())
 	}
@@ -1171,10 +1178,16 @@ func duckdbQueryCallback(db *gorm.DB) {
 
 	if rows, err := db.Statement.ConnPool.QueryContext(db.Statement.Context, db.Statement.SQL.String(), db.Statement.Vars...); err != nil {
 		debugLog("duckdbQueryCallback: query failed: %v", err)
-		db.AddError(err)
+		if err := db.AddError(err); err != nil {
+			debugLog("duckdbQueryCallback: failed to add error: %v", err)
+		}
 	} else {
 		debugLog("duckdbQueryCallback: query succeeded, scanning rows")
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				debugLog("duckdbQueryCallback: failed to close rows: %v", err)
+			}
+		}()
 		gorm.Scan(rows, db, 0)
 	}
 }

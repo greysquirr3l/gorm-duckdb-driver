@@ -358,8 +358,21 @@ func TestRollbackTo(t *testing.T) {
 
 // TestBeforeCreateCallback tests beforeCreateCallback function
 func TestBeforeCreateCallback(t *testing.T) {
-	// This is a simple function that does nothing
-	var db *gorm.DB
+	// Test that the callback function exists and can be called with a valid DB instance
+	db, err := gorm.Open(New(Config{DSN: ":memory:"}), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to create test database: %v", err)
+	}
+
+	// Define a simple model locally for testing
+	type TestModel struct {
+		ID   uint   `gorm:"primaryKey"`
+		Name string `gorm:"size:100"`
+	}
+
+	// Parse the model to create a valid statement
+	var model TestModel
+	db.Statement.Parse(&model)
 
 	// Should not panic
 	beforeCreateCallback(db)

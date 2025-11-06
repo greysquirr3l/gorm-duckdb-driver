@@ -12,6 +12,7 @@ import (
 )
 
 // Custom CREATE callback to replace GORM's broken one
+//nolint:gocyclo // Complex function handling comprehensive GORM CREATE integration
 func customCreateCallback(db *gorm.DB) {
 	debugLog("customCreateCallback called")
 	
@@ -73,7 +74,7 @@ func customCreateCallback(db *gorm.DB) {
 			// Build and execute the statement
 			db.Statement.Build("INSERT", "VALUES", "RETURNING")
 			debugLog("customCreateCallback: generated SQL: %s", db.Statement.SQL.String())
-			debugLog("customCreateCallback: vars: %+v", db.Statement.Vars)
+			debugLog("customCreateCallback: vars: %+v", any(db.Statement.Vars))
 			
 			// Execute the statement
 			if hasAutoIncrement {
@@ -105,14 +106,26 @@ func customCreateCallback(db *gorm.DB) {
 							case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 								var uintVal uint64
 								switch v := id.(type) {
-								case uint64:
-									uintVal = v
-								case int64:
-									uintVal = uint64(v)
-								case int32:
-									uintVal = uint64(v)
-								case int:
-									uintVal = uint64(v)
+							case uint64:
+								uintVal = v
+							case int64:
+								if v < 0 {
+									debugLog("customCreateCallback: Negative int64 %d cannot be converted to uint64", v)
+									return
+								}
+								uintVal = uint64(v)
+							case int32:
+								if v < 0 {
+									debugLog("customCreateCallback: Negative int32 %d cannot be converted to uint64", v)
+									return
+								}
+								uintVal = uint64(v)
+							case int:
+								if v < 0 {
+									debugLog("customCreateCallback: Negative int %d cannot be converted to uint64", v)
+									return
+								}
+								uintVal = uint64(v)
 								default:
 									debugLog("customCreateCallback: Could not convert ID %v (%T) to uint", id, id)
 									return
@@ -122,10 +135,14 @@ func customCreateCallback(db *gorm.DB) {
 							case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 								var intVal int64
 								switch v := id.(type) {
-								case int64:
-									intVal = v
-								case uint64:
-									intVal = int64(v)
+							case int64:
+								intVal = v
+							case uint64:
+								if v > 9223372036854775807 { // math.MaxInt64
+									debugLog("customCreateCallback: uint64 %d exceeds int64 maximum", v)
+									return
+								}
+								intVal = int64(v)
 								case int32:
 									intVal = int64(v)
 								case int:
@@ -167,8 +184,14 @@ func TestCustomCreateCallback(t *testing.T) {
 	t.Log("=== Custom CREATE Callback Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{
@@ -185,6 +208,9 @@ func TestCustomCreateCallback(t *testing.T) {
 
 	// Replace GORM's broken create callback with our custom one
 	err = db.Callback().Create().Replace("gorm:create", customCreateCallback)
+	if err != nil {
+		t.Fatalf("Failed to register custom create callback: %v", err)
+	}
 	if err != nil {
 		t.Fatalf("Failed to replace create callback: %v", err)
 	}

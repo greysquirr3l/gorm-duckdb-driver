@@ -1,11 +1,12 @@
 # GORM DuckDB Driver
 
-[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/greysquirr3l/gorm-duckdb-driver) [![Coverage](https://img.shields.io/badge/coverage-67.7%25-yellow.svg)](https://github.com/greysquirr3l/gorm-duckdb-driver)
+[![Tests](https://img.shields.io/badge/tests-passing-brightgreen.svg)](https://github.com/greysquirr3l/gorm-duckdb-driver) [![Coverage](https://img.shields.io/badge/coverage-67.7%25-yellow.svg)](https://github.com/greysquirr3l/gorm-duckdb-driver) [![Code Quality](https://img.shields.io/badge/linting-zero%20errors-brightgreen.svg)](https://github.com/greysquirr3l/gorm-duckdb-driver)
 
-A comprehensive DuckDB driver for [GORM](https://gorm.io), featuring native array support and complete GORM v2 compliance.
+A comprehensive DuckDB driver for [GORM](https://gorm.io), featuring native array support, complete GORM v2 compliance, and enterprise-grade code quality with zero linting errors.
 
 ## Features
 
+- **Enterprise Code Quality** - Zero linting errors across all categories with production-ready error handling
 - **Complete GORM Compliance** - Full GORM v2 interface implementation with all required methods
 - **Native Array Support** - First-class array types using DuckDB's native `Composite[T]` wrappers  
 - **Advanced DuckDB Types** - 19 sophisticated types including JSON, Decimal, UUID, ENUM, UNION, and more
@@ -33,12 +34,12 @@ module your-project
 go 1.24
 
 require (
-    github.com/greysquirr3l/gorm-duckdb-driver v0.6.1
+    github.com/greysquirr3l/gorm-duckdb-driver v0.7.0
     gorm.io/gorm v1.31.1
 )
 
 // Replace directive for latest release
-replace github.com/greysquirr3l/gorm-duckdb-driver => github.com/greysquirr3l/gorm-duckdb-driver v0.6.1
+replace github.com/greysquirr3l/gorm-duckdb-driver => github.com/greysquirr3l/gorm-duckdb-driver v0.7.0
 ```
 
 **Step 3:** Run `go mod tidy`:

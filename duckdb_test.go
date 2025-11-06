@@ -1,6 +1,7 @@
 package duckdb_test
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -50,7 +51,7 @@ func TestConnection(t *testing.T) {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 
-	err = sqlDB.Ping()
+	err = sqlDB.PingContext(context.Background())
 	assert.NoError(t, err)
 }
 

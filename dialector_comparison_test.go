@@ -1,6 +1,7 @@
 package duckdb
 
 import (
+	"fmt"
 	"os"
 	"strings"
 	"testing"
@@ -26,7 +27,7 @@ type testWriter struct {
 	prefix string
 }
 
-func (w *testWriter) Printf(format string, args ...interface{}) {
+func (w *testWriter) Printf(_ string, _ ...interface{}) {
 	// Just print to test output - simplified for this test
 }
 func TestDialectorComparison(t *testing.T) {
@@ -118,11 +119,18 @@ type clauseWriter struct {
 }
 
 func (w *clauseWriter) WriteByte(b byte) error {
-	return w.content.WriteByte(b)
+	if err := w.content.WriteByte(b); err != nil {
+		return fmt.Errorf("failed to write byte: %w", err)
+	}
+	return nil
 }
 
 func (w *clauseWriter) WriteString(s string) (int, error) {
-	return w.content.WriteString(s)
+	n, err := w.content.WriteString(s)
+	if err != nil {
+		return n, fmt.Errorf("failed to write string: %w", err)
+	}
+	return n, nil
 }
 
 func (w *clauseWriter) String() string {
@@ -192,8 +200,14 @@ func TestDebugSQL(t *testing.T) {
 	t.Log("=== Debug SQL Generation ===")
 	
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	// Test with DuckDB
 	duckdbDialector := Dialector{

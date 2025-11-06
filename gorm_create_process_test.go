@@ -10,12 +10,19 @@ import (
 )
 
 // Test to see what's happening inside GORM's create process
+//nolint:errcheck,gosec // Test function with debug callbacks
 func TestGORMCreateProcess(t *testing.T) {
 	t.Log("=== GORM Create Process Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{

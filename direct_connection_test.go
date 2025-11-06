@@ -1,11 +1,12 @@
 package duckdb_test
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 
-	"github.com/stretchr/testify/require"
 	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
+	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -14,11 +15,15 @@ func TestConnectionDirect(t *testing.T) {
 	// Test if our driver registration works
 	db, err := sql.Open("duckdb-gorm", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("Failed to close database: %v", err)
+		}
+	}()
 
 	// Test basic query
 	var result int
-	err = db.QueryRow("SELECT 1").Scan(&result)
+	err = db.QueryRowContext(context.Background(), "SELECT 1").Scan(&result)
 	require.NoError(t, err)
 	require.Equal(t, 1, result)
 	

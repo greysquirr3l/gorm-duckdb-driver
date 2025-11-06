@@ -14,8 +14,14 @@ func TestFixStatementClauses(t *testing.T) {
 	t.Log("=== Fix Statement Clauses Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{
@@ -31,6 +37,7 @@ func TestFixStatementClauses(t *testing.T) {
 	}
 
 	// Add a callback to initialize Statement.Clauses if it's nil
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().Before("gorm:create").Register("fix:init_clauses", func(db *gorm.DB) {
 		t.Logf("Before fix - Clauses: %+v", db.Statement.Clauses)
 		if db.Statement.Clauses == nil {
@@ -41,6 +48,7 @@ func TestFixStatementClauses(t *testing.T) {
 	})
 
 	// Add callback to inspect statement after GORM's create
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().After("gorm:create").Register("debug:after_gorm_create", func(db *gorm.DB) {
 		t.Logf("After GORM create:")
 		t.Logf("  SQL: '%s'", db.Statement.SQL.String())

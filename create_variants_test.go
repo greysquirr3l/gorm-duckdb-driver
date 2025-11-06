@@ -13,8 +13,14 @@ func TestCreateWithoutAutoIncrement(t *testing.T) {
 	t.Log("=== Create Without Auto-Increment Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{
@@ -30,13 +36,17 @@ func TestCreateWithoutAutoIncrement(t *testing.T) {
 	}
 
 	// Add debug callbacks
-	db.Callback().Create().Before("gorm:create").Register("debug:before_create_simple", func(db *gorm.DB) {
+	if err := db.Callback().Create().Before("gorm:create").Register("debug:before_create_simple", func(db *gorm.DB) {
 		t.Logf("[DEBUG] Before gorm:create - SQL: '%s', Clauses: %+v", db.Statement.SQL.String(), db.Statement.Clauses)
-	})
+	}); err != nil {
+		t.Logf("Failed to register debug callback: %v", err)
+	}
 
-	db.Callback().Create().After("gorm:create").Register("debug:after_create_simple", func(db *gorm.DB) {
+	if err := db.Callback().Create().After("gorm:create").Register("debug:after_create_simple", func(db *gorm.DB) {
 		t.Logf("[DEBUG] After gorm:create - SQL: '%s', Clauses: %+v", db.Statement.SQL.String(), db.Statement.Clauses)
-	})
+	}); err != nil {
+		t.Logf("Failed to register debug callback: %v", err)
+	}
 
 	// Simple model without auto-increment
 	type SimpleModel struct {
@@ -62,8 +72,14 @@ func TestCreateWithStringPK(t *testing.T) {
 	t.Log("=== Create With String Primary Key Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{
@@ -79,10 +95,12 @@ func TestCreateWithStringPK(t *testing.T) {
 	}
 
 	// Add debug callbacks
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().Before("gorm:create").Register("debug:before_create_string", func(db *gorm.DB) {
 		t.Logf("[DEBUG] Before gorm:create - SQL: '%s', Clauses: %+v", db.Statement.SQL.String(), db.Statement.Clauses)
 	})
 
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().After("gorm:create").Register("debug:after_create_string", func(db *gorm.DB) {
 		t.Logf("[DEBUG] After gorm:create - SQL: '%s', Clauses: %+v", db.Statement.SQL.String(), db.Statement.Clauses)
 	})
@@ -111,8 +129,14 @@ func TestCreateNoPK(t *testing.T) {
 	t.Log("=== Create With No Primary Key Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{
@@ -128,10 +152,12 @@ func TestCreateNoPK(t *testing.T) {
 	}
 
 	// Add debug callbacks
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().Before("gorm:create").Register("debug:before_create_nopk", func(db *gorm.DB) {
 		t.Logf("[DEBUG] Before gorm:create - SQL: '%s', Clauses: %+v", db.Statement.SQL.String(), db.Statement.Clauses)
 	})
 
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().After("gorm:create").Register("debug:after_create_nopk", func(db *gorm.DB) {
 		t.Logf("[DEBUG] After gorm:create - SQL: '%s', Clauses: %+v", db.Statement.SQL.String(), db.Statement.Clauses)
 	})

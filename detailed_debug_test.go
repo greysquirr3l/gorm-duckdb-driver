@@ -14,8 +14,14 @@ func TestDetailedCallbackDebug(t *testing.T) {
 	t.Log("=== Detailed Callback Debug Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	// Setup DuckDB with extra debugging
 	dialector := Dialector{
@@ -32,6 +38,7 @@ func TestDetailedCallbackDebug(t *testing.T) {
 	}
 
 	// Add custom callback to inspect statement building
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().Before("gorm:create").Register("debug:before_create", func(db *gorm.DB) {
 		t.Logf("DEBUG: Before gorm:create callback")
 		t.Logf("DEBUG: Statement.SQL: '%s'", db.Statement.SQL.String())
@@ -44,6 +51,7 @@ func TestDetailedCallbackDebug(t *testing.T) {
 		t.Logf("DEBUG: Statement.Clauses: %+v", db.Statement.Clauses)
 	})
 
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().After("gorm:create").Register("debug:after_create", func(db *gorm.DB) {
 		t.Logf("DEBUG: After gorm:create callback")
 		t.Logf("DEBUG: Statement.SQL: '%s'", db.Statement.SQL.String())
@@ -53,10 +61,12 @@ func TestDetailedCallbackDebug(t *testing.T) {
 	})
 
 	// Add callback to inspect statement at each step
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().Before("gorm:before_create").Register("debug:statement_inspect", func(db *gorm.DB) {
 		t.Logf("DEBUG: Before gorm:before_create - SQL: '%s'", db.Statement.SQL.String())
 	})
 
+	//nolint:errcheck,gosec // Debug callbacks - errors not critical for test functionality
 	db.Callback().Create().After("gorm:before_create").Register("debug:after_before_create", func(db *gorm.DB) {
 		t.Logf("DEBUG: After gorm:before_create - SQL: '%s'", db.Statement.SQL.String())
 	})
@@ -87,8 +97,14 @@ func TestStatementBuilding(t *testing.T) {
 	t.Log("=== Statement Building Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{
@@ -114,29 +130,31 @@ func TestStatementBuilding(t *testing.T) {
 		t.Fatalf("Migration failed: %v", err)
 	}
 
-	// Manually build and test the statement
+	// Manually build and test the statement using proper GORM pattern
 	model := SimpleModel{Name: "Manual Test"}
-	stmt := &gorm.Statement{DB: db}
+	stmt := db.Statement
 	stmt.Parse(&model)
 	
 	t.Logf("Manual statement parse:")
 	t.Logf("  Schema: %+v", stmt.Schema)
 	t.Logf("  Table: %s", stmt.Table)
 	
-	// Try to build the SQL manually using GORM's clause system
-	stmt.AddClause(clause.Insert{})
-	stmt.AddClause(clause.Values{Columns: []clause.Column{{Name: "name"}}, Values: [][]interface{}{{"Manual Test"}}})
+	// Try to build the SQL manually using GORM's clause system with proper initialization
+	tx := db.Session(&gorm.Session{DryRun: true})
+	tx.Statement.Parse(&model)
+	tx.Statement.AddClause(clause.Insert{})
+	tx.Statement.AddClause(clause.Values{Columns: []clause.Column{{Name: "name"}}, Values: [][]interface{}{{"Manual Test"}}})
 	
 	// Build the statement
-	stmt.Build("INSERT")
+	tx.Statement.Build("INSERT")
 	
 	t.Logf("Manual statement build:")
-	t.Logf("  SQL: %s", stmt.SQL.String())
-	t.Logf("  Vars: %+v", stmt.Vars)
+	t.Logf("  SQL: %s", tx.Statement.SQL.String())
+	t.Logf("  Vars: %+v", tx.Statement.Vars)
 
 	// Try executing the manually built statement
-	if stmt.SQL.Len() > 0 {
-		result, err := stmt.ConnPool.ExecContext(stmt.Context, stmt.SQL.String(), stmt.Vars...)
+	if tx.Statement.SQL.Len() > 0 {
+		result, err := tx.Statement.ConnPool.ExecContext(tx.Statement.Context, tx.Statement.SQL.String(), tx.Statement.Vars...)
 		if err != nil {
 			t.Logf("Manual execution failed: %v", err)
 		} else {

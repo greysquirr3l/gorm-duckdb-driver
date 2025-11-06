@@ -1,6 +1,7 @@
 package duckdb_test
 
 import (
+	"context"
 	"database/sql"
 	"testing"
 
@@ -14,13 +15,17 @@ func TestRawDuckDBDriver(t *testing.T) {
 	
 	db, err := sql.Open("test-duckdb", ":memory:")
 	require.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("Failed to close database: %v", err)
+		}
+	}()
 
 	// Create sequence and table (same pattern as GORM)
-	_, err = db.Exec("CREATE SEQUENCE IF NOT EXISTS seq_test_users_id START 1")
+	_, err = db.ExecContext(context.Background(), "CREATE SEQUENCE IF NOT EXISTS seq_test_users_id START 1")
 	require.NoError(t, err)
 	
-	_, err = db.Exec(`CREATE TABLE test_users (
+	_, err = db.ExecContext(context.Background(), `CREATE TABLE test_users (
 		id INTEGER DEFAULT nextval('seq_test_users_id') PRIMARY KEY,
 		name VARCHAR(100),
 		email VARCHAR(255)
@@ -28,7 +33,7 @@ func TestRawDuckDBDriver(t *testing.T) {
 	require.NoError(t, err)
 
 	// Insert data
-	result, err := db.Exec("INSERT INTO test_users (name, email) VALUES (?, ?)", "John Doe", "john@example.com")
+	result, err := db.ExecContext(context.Background(), "INSERT INTO test_users (name, email) VALUES (?, ?)", "John Doe", "john@example.com")
 	require.NoError(t, err)
 	
 	rowsAffected, err := result.RowsAffected()
@@ -44,9 +49,13 @@ func TestRawDuckDBDriver(t *testing.T) {
 	}
 
 	// Query data back
-	rows, err := db.Query("SELECT id, name, email FROM test_users")
+	rows, err := db.QueryContext(context.Background(), "SELECT id, name, email FROM test_users")
 	require.NoError(t, err)
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			t.Logf("Failed to close rows: %v", err)
+		}
+	}()
 
 	var users []struct {
 		ID    int

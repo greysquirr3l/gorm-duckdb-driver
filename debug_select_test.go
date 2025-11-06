@@ -14,8 +14,14 @@ func TestSelectDebug(t *testing.T) {
 	t.Log("=== SELECT Debug Test ===")
 
 	// Enable debug mode
-	os.Setenv("GORM_DUCKDB_DEBUG", "1")
-	defer os.Unsetenv("GORM_DUCKDB_DEBUG")
+	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
+		t.Fatalf("Failed to set debug environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("GORM_DUCKDB_DEBUG"); err != nil {
+			t.Logf("Failed to unset debug environment variable: %v", err)
+		}
+	}()
 
 	dialector := Dialector{
 		Config: &Config{
@@ -63,7 +69,11 @@ func TestSelectDebug(t *testing.T) {
 	if err != nil {
 		t.Logf("Raw SQL failed: %v", err)
 	} else {
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				t.Logf("Failed to close rows: %v", err)
+			}
+		}()
 		count := 0
 		for rows.Next() {
 			count++

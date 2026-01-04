@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -23,8 +24,8 @@ func TestSelectDebug(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}

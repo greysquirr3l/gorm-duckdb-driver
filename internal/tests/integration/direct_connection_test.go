@@ -26,7 +26,7 @@ func TestConnectionDirect(t *testing.T) {
 	err = db.QueryRowContext(context.Background(), "SELECT 1").Scan(&result)
 	require.NoError(t, err)
 	require.Equal(t, 1, result)
-	
+
 	t.Log("Direct SQL connection works")
 
 	// Now test GORM with explicit connection
@@ -41,7 +41,7 @@ func TestConnectionDirect(t *testing.T) {
 
 	// Simple create test
 	type DirectUser struct {
-		ID   uint   `gorm:"primaryKey"`
+		ID   uint `gorm:"primaryKey"`
 		Name string
 	}
 
@@ -50,7 +50,7 @@ func TestConnectionDirect(t *testing.T) {
 
 	user := DirectUser{Name: "Direct Test"}
 	result2 := gormDB.Create(&user)
-	
+
 	t.Logf("Direct GORM Create result: Error=%v, RowsAffected=%d", result2.Error, result2.RowsAffected)
 	t.Logf("Direct User after create: %+v", user)
 }

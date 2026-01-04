@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/marcboeker/go-duckdb/v2"
+	"github.com/duckdb/duckdb-go/v2"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
@@ -350,7 +350,7 @@ func convertNamedValues(args []driver.NamedValue) []driver.NamedValue {
 			}
 		} else if isSlice(arg.Value) {
 			// Convert Go slices to DuckDB array format
-			if arrayStr, err := formatSliceForDuckDB(arg.Value); err == nil {
+			if arrayStr, err := FormatSliceForDuckDB(arg.Value); err == nil {
 				converted[i].Value = arrayStr
 			}
 		}
@@ -430,28 +430,28 @@ func (dialector Dialector) Initialize(db *gorm.DB) error {
 
 		// Temporarily disable other custom callbacks to test GORM's default behavior
 		/*
-		// Override the create callback to use RETURNING for auto-increment fields.
-		if err := db.Callback().Create().Before("gorm:create").Register("duckdb:before_create", beforeCreateCallback); err != nil {
-			// Ignore duplicate/already-registered errors
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
-				return fmt.Errorf("failed to register before create callback: %w", err)
+			// Override the create callback to use RETURNING for auto-increment fields.
+			if err := db.Callback().Create().Before("gorm:create").Register("duckdb:before_create", beforeCreateCallback); err != nil {
+				// Ignore duplicate/already-registered errors
+				if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
+					return fmt.Errorf("failed to register before create callback: %w", err)
+				}
 			}
-		}
 
-		// Add an after-create callback to handle auto-increment ID retrieval
-		// instead of replacing the entire create callback
-		if err := db.Callback().Create().After("gorm:create").Register("duckdb:after_create", afterCreateCallback); err != nil {
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
-				return fmt.Errorf("failed to register after create callback: %w", err)
+			// Add an after-create callback to handle auto-increment ID retrieval
+			// instead of replacing the entire create callback
+			if err := db.Callback().Create().After("gorm:create").Register("duckdb:after_create", afterCreateCallback); err != nil {
+				if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
+					return fmt.Errorf("failed to register after create callback: %w", err)
+				}
 			}
-		}
 
-		// Add a debug callback right after GORM's create to see what's happening
-		if err := db.Callback().Create().After("gorm:create").Before("duckdb:after_create").Register("duckdb:debug_create", debugCreateCallback); err != nil {
-			if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
-				// Ignore duplicate errors for debug callback
+			// Add a debug callback right after GORM's create to see what's happening
+			if err := db.Callback().Create().After("gorm:create").Before("duckdb:after_create").Register("duckdb:debug_create", debugCreateCallback); err != nil {
+				if !strings.Contains(strings.ToLower(err.Error()), "duplicated") && !strings.Contains(strings.ToLower(err.Error()), "already") {
+					// Ignore duplicate errors for debug callback
+				}
 			}
-		}
 		*/
 
 		// Replace the row callback with our DuckDB-compatible version
@@ -775,23 +775,23 @@ func afterCreateCallback(db *gorm.DB) {
 		for _, field := range db.Statement.Schema.PrimaryFields {
 			if field.AutoIncrement {
 				debugLog(" afterCreateCallback: Attempting to retrieve auto-increment ID for field: %s", field.Name)
-				
+
 				// For DuckDB, we need to get the current sequence value
 				// The sequence name follows the pattern: seq_{table_name}_{field_name}
 				tableName := db.Statement.Schema.Table
 				sequenceName := fmt.Sprintf("seq_%s_%s", tableName, field.DBName)
-				
+
 				var currentID int64
 				query := fmt.Sprintf("SELECT currval('%s')", sequenceName)
-				
+
 				err := db.Raw(query).Scan(&currentID).Error
 				if err != nil {
 					debugLog(" afterCreateCallback: Failed to get sequence value: %v", err)
 					return
 				}
-				
+
 				debugLog(" afterCreateCallback: Retrieved ID: %d", currentID)
-				
+
 				// Set the ID in the model
 				if db.Statement.ReflectValue.IsValid() && db.Statement.ReflectValue.CanAddr() {
 					modelValue := db.Statement.ReflectValue
@@ -956,6 +956,7 @@ func rowQueryCallback(db *gorm.DB) {
 
 // duckdbCreateCallback implements a custom CREATE callback to work around
 // GORM v1.31.1 issue where gorm:create doesn't generate INSERT SQL for DuckDB dialector
+//
 //nolint:gosec // G115: Integer conversions in ID handling are validated by GORM
 func duckdbCreateCallback(db *gorm.DB) {
 	if db.Error != nil {
@@ -990,7 +991,7 @@ func duckdbCreateCallback(db *gorm.DB) {
 		if fieldValue.Kind() == reflect.Ptr {
 			fieldValue = fieldValue.Elem()
 		}
-		
+
 		if fieldValue.Kind() == reflect.Struct {
 			modelFieldValue := fieldValue.FieldByName(field.Name)
 			if modelFieldValue.IsValid() {
@@ -1034,59 +1035,59 @@ func duckdbCreateCallback(db *gorm.DB) {
 		} else {
 			db.RowsAffected = 1
 			debugLog("duckdbCreateCallback: QueryRow succeeded, ID: %v", id)
-			
+
 			// Set the ID back to the model
 			// Get the struct value (dereference pointer if needed)
 			structValue := stmt.ReflectValue
 			if structValue.Kind() == reflect.Ptr {
 				structValue = structValue.Elem()
 			}
-			
+
 			fieldValue := structValue.FieldByName(autoIncrementField.Name)
-				debugLog("duckdbCreateCallback: Setting field %s, Valid: %t, CanSet: %t, Kind: %s", 
-					autoIncrementField.Name, fieldValue.IsValid(), fieldValue.CanSet(), fieldValue.Kind())
-				
-				if fieldValue.IsValid() && fieldValue.CanSet() {
-					debugLog("duckdbCreateCallback: ID value type: %T, value: %v", id, id)
-					switch fieldValue.Kind() {
-					case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-						var uintVal uint64
-						switch v := id.(type) {
-						case uint64:
-							uintVal = v
-						case int64:
-							uintVal = uint64(v)
-						case int32:
-							uintVal = uint64(v)
-						case int:
-							uintVal = uint64(v)
-						default:
-							debugLog("duckdbCreateCallback: Could not convert ID %v (%T) to uint", id, id)
-							return
-						}
-						fieldValue.SetUint(uintVal)
-						debugLog("duckdbCreateCallback: Set uint field to %d", uintVal)
-					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-						var intVal int64
-						switch v := id.(type) {
-						case int64:
-							intVal = v
-						case uint64:
-							intVal = int64(v)
-						case int32:
-							intVal = int64(v)
-						case int:
-							intVal = int64(v)
-						default:
-							debugLog("duckdbCreateCallback: Could not convert ID %v (%T) to int", id, id)
-							return
-						}
-						fieldValue.SetInt(intVal)
-						debugLog("duckdbCreateCallback: Set int field to %d", intVal)
+			debugLog("duckdbCreateCallback: Setting field %s, Valid: %t, CanSet: %t, Kind: %s",
+				autoIncrementField.Name, fieldValue.IsValid(), fieldValue.CanSet(), fieldValue.Kind())
+
+			if fieldValue.IsValid() && fieldValue.CanSet() {
+				debugLog("duckdbCreateCallback: ID value type: %T, value: %v", id, id)
+				switch fieldValue.Kind() {
+				case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+					var uintVal uint64
+					switch v := id.(type) {
+					case uint64:
+						uintVal = v
+					case int64:
+						uintVal = uint64(v)
+					case int32:
+						uintVal = uint64(v)
+					case int:
+						uintVal = uint64(v)
+					default:
+						debugLog("duckdbCreateCallback: Could not convert ID %v (%T) to uint", id, id)
+						return
 					}
-				} else {
-					debugLog("duckdbCreateCallback: Cannot set field %s", autoIncrementField.Name)
+					fieldValue.SetUint(uintVal)
+					debugLog("duckdbCreateCallback: Set uint field to %d", uintVal)
+				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+					var intVal int64
+					switch v := id.(type) {
+					case int64:
+						intVal = v
+					case uint64:
+						intVal = int64(v)
+					case int32:
+						intVal = int64(v)
+					case int:
+						intVal = int64(v)
+					default:
+						debugLog("duckdbCreateCallback: Could not convert ID %v (%T) to int", id, id)
+						return
+					}
+					fieldValue.SetInt(intVal)
+					debugLog("duckdbCreateCallback: Set int field to %d", intVal)
 				}
+			} else {
+				debugLog("duckdbCreateCallback: Cannot set field %s", autoIncrementField.Name)
+			}
 		}
 	} else {
 		// Use Exec for non-returning operations
@@ -1106,7 +1107,7 @@ func duckdbCreateCallback(db *gorm.DB) {
 // GORM v1.31.1 issue where gorm:query doesn't generate SELECT SQL for DuckDB dialector
 func duckdbQueryCallback(db *gorm.DB) {
 	debugLog("duckdbQueryCallback called")
-	
+
 	if db.Error != nil {
 		debugLog("duckdbQueryCallback: early exit due to existing error: %v", db.Error)
 		return
@@ -1121,7 +1122,7 @@ func duckdbQueryCallback(db *gorm.DB) {
 	// If GORM's build failed or produced incomplete SQL, build manually
 	if db.Statement.SQL.String() == "" || !strings.Contains(db.Statement.SQL.String(), "SELECT") {
 		debugLog("duckdbQueryCallback: GORM Build failed, building SELECT manually")
-		
+
 		// Build SELECT clause manually
 		selectSQL := "SELECT "
 		if db.Statement.Schema != nil && len(db.Statement.Schema.Fields) > 0 {
@@ -1136,13 +1137,13 @@ func duckdbQueryCallback(db *gorm.DB) {
 		} else {
 			selectSQL += "*"
 		}
-		
+
 		// Add FROM clause
 		fromSQL := fmt.Sprintf(` FROM "%s"`, db.Statement.Table)
-		
+
 		// Build complete SQL
 		completeSQL := selectSQL + fromSQL
-		
+
 		// Add WHERE clause if exists
 		if len(db.Statement.Clauses) > 0 {
 			// Try to build WHERE clause
@@ -1152,18 +1153,18 @@ func duckdbQueryCallback(db *gorm.DB) {
 				completeSQL += " " + whereSQL
 			}
 		}
-		
+
 		// Add ORDER BY and LIMIT if present (from First() calls)
 		db.Statement.SQL.Reset()
 		db.Statement.Build("ORDER BY", "LIMIT")
 		if orderLimitSQL := db.Statement.SQL.String(); orderLimitSQL != "" {
 			completeSQL += " " + orderLimitSQL
 		}
-		
+
 		// Set the complete SQL
 		db.Statement.SQL.Reset()
 		db.Statement.SQL.WriteString(completeSQL)
-		
+
 		debugLog("duckdbQueryCallback: manually built SQL: %s", db.Statement.SQL.String())
 		debugLog("duckdbQueryCallback: vars: %v", any(db.Statement.Vars))
 	} else {

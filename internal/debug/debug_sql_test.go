@@ -11,6 +11,14 @@ import (
 	"gorm.io/gorm/logger"
 )
 
+type User struct {
+	ID       uint      `gorm:"primaryKey;autoIncrement"`
+	Name     string    `gorm:"size:100;not null"`
+	Email    string    `gorm:"size:255"`
+	Age      uint8
+	Birthday time.Time
+}
+
 func TestDirectSQL(t *testing.T) {
 	// Setup database
 	dialector := duckdb.Open(":memory:")

@@ -14,7 +14,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	db, err := gormDB.DB()
 	if err != nil {
 		log.Fatal(err)
@@ -53,14 +53,14 @@ func main() {
 	for rows.Next() {
 		var id int
 		var strArr interface{}
-		
+
 		err := rows.Scan(&id, &strArr)
 		if err != nil {
 			log.Fatal("Scan:", err)
 		}
-		
+
 		fmt.Printf("ID: %d, Array: %v (type: %T)\n", id, strArr, strArr)
-		
+
 		// Try as string and []byte
 		if s, ok := strArr.(string); ok {
 			fmt.Printf("  As string: %q\n", s)

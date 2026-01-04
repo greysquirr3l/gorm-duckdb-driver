@@ -5,17 +5,27 @@ import (
 	"testing"
 
 	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
+	"gorm.io/gorm"
 )
+
+func setupTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(duckdb.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to connect to test database: %v", err)
+	}
+	return db
+}
 
 // Test if the issue is struct field initialization
 type TestStructWithDefaults struct {
-	ID    uint `gorm:"primaryKey"`
+	ID    uint               `gorm:"primaryKey"`
 	Array duckdb.StringArray `gorm:"column:array_col;default:[]"`
 }
 
 // Try with pointer field
 type TestStructWithPointer struct {
-	ID    uint `gorm:"primaryKey"`
+	ID    uint                `gorm:"primaryKey"`
 	Array *duckdb.StringArray `gorm:"column:array_col"`
 }
 

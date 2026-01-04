@@ -10,7 +10,7 @@ import (
 )
 
 type SQLiteTestUser struct {
-	ID   uint   `gorm:"primaryKey"`
+	ID   uint `gorm:"primaryKey"`
 	Name string
 }
 
@@ -26,14 +26,14 @@ func TestGORMWithSQLite(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("=== Starting SQLite Create operation ===")
-	
+
 	// Create
 	user := SQLiteTestUser{Name: "Test User"}
 	result := db.Create(&user)
-	
+
 	t.Logf("SQLite Create result: Error=%v, RowsAffected=%d", result.Error, result.RowsAffected)
 	t.Logf("SQLite User after create: %+v", user)
-	
+
 	require.NoError(t, result.Error)
 	require.Equal(t, int64(1), result.RowsAffected)
 	require.NotZero(t, user.ID)

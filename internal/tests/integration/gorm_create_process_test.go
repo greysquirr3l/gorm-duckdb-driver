@@ -5,11 +5,13 @@ import (
 	"reflect"
 	"testing"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
 // Test to see what's happening inside GORM's create process
+//
 //nolint:errcheck,gosec // Test function with debug callbacks
 func TestGORMCreateProcess(t *testing.T) {
 	t.Log("=== GORM Create Process Test ===")
@@ -24,8 +26,8 @@ func TestGORMCreateProcess(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -67,7 +69,7 @@ func TestGORMCreateProcess(t *testing.T) {
 		t.Logf("  SQL: %s", db.Statement.SQL.String())
 		t.Logf("  Clauses: %+v", db.Statement.Clauses)
 		t.Logf("  Error: %v", db.Error)
-		
+
 		// Let's check if the model is valid for creation
 		if db.Statement.Schema != nil {
 			t.Logf("  Schema.Table: %s", db.Statement.Schema.Table)
@@ -76,7 +78,7 @@ func TestGORMCreateProcess(t *testing.T) {
 				t.Logf("    Field: %s, DBName: %s, PrimaryKey: %t", field.Name, field.DBName, field.PrimaryKey)
 			}
 		}
-		
+
 		// Check if we have a valid destination
 		if db.Statement.Dest != nil {
 			destType := reflect.TypeOf(db.Statement.Dest)
@@ -96,7 +98,7 @@ func TestGORMCreateProcess(t *testing.T) {
 	})
 
 	type SimpleModel struct {
-		ID   uint   `gorm:"primaryKey;autoIncrement"`
+		ID   uint `gorm:"primaryKey;autoIncrement"`
 		Name string
 	}
 
@@ -112,6 +114,6 @@ func TestGORMCreateProcess(t *testing.T) {
 	result := db.Create(&model)
 	t.Logf("\n=== Final Result ===")
 	t.Logf("Error: %v", result.Error)
-	t.Logf("RowsAffected: %d", result.RowsAffected) 
+	t.Logf("RowsAffected: %d", result.RowsAffected)
 	t.Logf("Model ID: %d", model.ID)
 }

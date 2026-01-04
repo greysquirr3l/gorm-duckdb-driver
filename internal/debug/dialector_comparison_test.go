@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -43,8 +44,8 @@ func TestDialectorComparison(t *testing.T) {
 	}
 
 	// Setup DuckDB
-	duckdbDialector := Dialector{
-		Config: &Config{
+	duckdbDialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -61,20 +62,20 @@ func TestDialectorComparison(t *testing.T) {
 
 	// Compare QuoteTo methods by writing to a string builder
 	var sqliteQuote, duckdbQuote strings.Builder
-	
+
 	sqliteDialector.QuoteTo(&sqliteQuote, "test_table")
 	duckdbDialector.QuoteTo(&duckdbQuote, "test_table")
-	
+
 	t.Logf("SQLite QuoteTo('test_table'): %s", sqliteQuote.String())
 	t.Logf("DuckDB QuoteTo('test_table'): %s", duckdbQuote.String())
 
 	// Test with complex identifier
 	sqliteQuote.Reset()
 	duckdbQuote.Reset()
-	
+
 	sqliteDialector.QuoteTo(&sqliteQuote, "test.column")
 	duckdbDialector.QuoteTo(&duckdbQuote, "test.column")
-	
+
 	t.Logf("SQLite QuoteTo('test.column'): %s", sqliteQuote.String())
 	t.Logf("DuckDB QuoteTo('test.column'): %s", duckdbQuote.String())
 
@@ -101,15 +102,15 @@ func TestDialectorComparison(t *testing.T) {
 
 	// Test creating records
 	t.Log("\n=== Create Test ===")
-	
+
 	sqliteModel := TestModel{Name: "SQLite Test"}
 	result := sqliteDB.Create(&sqliteModel)
-	t.Logf("SQLite Create - Error: %v, RowsAffected: %d, ID: %d", 
+	t.Logf("SQLite Create - Error: %v, RowsAffected: %d, ID: %d",
 		result.Error, result.RowsAffected, sqliteModel.ID)
 
 	duckdbModel := TestModel{Name: "DuckDB Test"}
 	result = duckdbDB.Create(&duckdbModel)
-	t.Logf("DuckDB Create - Error: %v, RowsAffected: %d, ID: %d", 
+	t.Logf("DuckDB Create - Error: %v, RowsAffected: %d, ID: %d",
 		result.Error, result.RowsAffected, duckdbModel.ID)
 }
 
@@ -148,8 +149,8 @@ func TestClauseBuilding(t *testing.T) {
 	t.Logf("SQLite clause building for 'users': %s", sqliteWriter.String())
 
 	// Test DuckDB clause building
-	duckdbDialector := Dialector{
-		Config: &Config{
+	duckdbDialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -160,7 +161,7 @@ func TestClauseBuilding(t *testing.T) {
 	// Test both with quotes and special characters
 	testCases := []string{
 		"simple",
-		"table.column", 
+		"table.column",
 		`"quoted"`,
 		"user-name",
 		"user name",
@@ -169,10 +170,10 @@ func TestClauseBuilding(t *testing.T) {
 	for _, testCase := range testCases {
 		sqliteWriter.content.Reset()
 		duckdbWriter.content.Reset()
-		
+
 		sqliteDialector.QuoteTo(&sqliteWriter, testCase)
 		duckdbDialector.QuoteTo(&duckdbWriter, testCase)
-		
+
 		t.Logf("Input: %s", testCase)
 		t.Logf("  SQLite: %s", sqliteWriter.String())
 		t.Logf("  DuckDB: %s", duckdbWriter.String())
@@ -185,12 +186,12 @@ func TestDataTypeComparison(t *testing.T) {
 
 	// We can't easily test SQLite's DataTypeOf without accessing internals,
 	// but we can test our DuckDB implementation
-	duckdbDialector := Dialector{
-		Config: &Config{
+	duckdbDialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
-	
+
 	// Create a mock schema field for testing
 	// This is a simplified test - in real GORM this would be more complex
 	t.Logf("DuckDB Dialector Name: %s", duckdbDialector.Name())
@@ -198,7 +199,7 @@ func TestDataTypeComparison(t *testing.T) {
 
 func TestDebugSQL(t *testing.T) {
 	t.Log("=== Debug SQL Generation ===")
-	
+
 	// Enable debug mode
 	if err := os.Setenv("GORM_DUCKDB_DEBUG", "1"); err != nil {
 		t.Fatalf("Failed to set debug environment variable: %v", err)
@@ -210,8 +211,8 @@ func TestDebugSQL(t *testing.T) {
 	}()
 
 	// Test with DuckDB
-	duckdbDialector := Dialector{
-		Config: &Config{
+	duckdbDialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -223,7 +224,7 @@ func TestDebugSQL(t *testing.T) {
 	}
 
 	type SimpleModel struct {
-		ID   uint   `gorm:"primaryKey;autoIncrement"`
+		ID   uint `gorm:"primaryKey;autoIncrement"`
 		Name string
 	}
 
@@ -236,12 +237,12 @@ func TestDebugSQL(t *testing.T) {
 
 	// Now try create - this should show us exactly what's happening
 	model := SimpleModel{Name: "Test"}
-	
+
 	t.Log("About to call db.Create()...")
 	result := db.Create(&model)
-	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d", 
+	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d",
 		result.Error, result.RowsAffected, model.ID)
-		
+
 	// Let's also try a raw SQL insert to verify the connection works
 	t.Log("Testing raw SQL...")
 	err = db.Exec("INSERT INTO simple_models (name) VALUES (?)", "Raw Test").Error

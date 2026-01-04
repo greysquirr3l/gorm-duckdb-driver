@@ -18,6 +18,15 @@ type TestArrayModel struct {
 	IntArr    duckdb.IntArray    `json:"int_arr"`
 }
 
+func setupTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(duckdb.Open(":memory:"), &gorm.Config{})
+	if err != nil {
+		t.Fatalf("Failed to connect to test database: %v", err)
+	}
+	return db
+}
+
 func setupArrayTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 	db := setupTestDB(t)
@@ -32,7 +41,7 @@ func TestNativeArrayFunctionality(t *testing.T) {
 	// Skip this test for now due to issues with GORM Scan and Raw queries
 	// The underlying array functionality is tested in other test files
 	t.Skip("Skipping due to GORM Raw().Scan() issues with array queries")
-	
+
 	// Test basic array creation without DB queries
 	stringValues := []string{"hello", "world", "test"}
 	stringArr := duckdb.NewStringArray(stringValues)

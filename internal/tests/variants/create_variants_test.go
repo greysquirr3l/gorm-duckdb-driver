@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -22,8 +23,8 @@ func TestCreateWithoutAutoIncrement(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -50,7 +51,7 @@ func TestCreateWithoutAutoIncrement(t *testing.T) {
 
 	// Simple model without auto-increment
 	type SimpleModel struct {
-		ID   int    `gorm:"primaryKey"`  // Manual primary key, no auto-increment
+		ID   int `gorm:"primaryKey"` // Manual primary key, no auto-increment
 		Name string
 	}
 
@@ -68,6 +69,7 @@ func TestCreateWithoutAutoIncrement(t *testing.T) {
 }
 
 // Test CREATE with string primary key
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestCreateWithStringPK(t *testing.T) {
 	t.Log("=== Create With String Primary Key Test ===")
 
@@ -81,8 +83,8 @@ func TestCreateWithStringPK(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -107,7 +109,7 @@ func TestCreateWithStringPK(t *testing.T) {
 
 	// Model with string primary key (no auto-increment)
 	type Product struct {
-		Code string `gorm:"primaryKey;size:10"`  // String primary key
+		Code string `gorm:"primaryKey;size:10"` // String primary key
 		Name string `gorm:"size:100"`
 	}
 
@@ -125,6 +127,7 @@ func TestCreateWithStringPK(t *testing.T) {
 }
 
 // Test CREATE with no primary key at all
+//nolint:dupl // Test setup duplication is acceptable for clarity
 func TestCreateNoPK(t *testing.T) {
 	t.Log("=== Create With No Primary Key Test ===")
 
@@ -138,8 +141,8 @@ func TestCreateNoPK(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -12,8 +13,8 @@ func TestQueryCallbackDebug(t *testing.T) {
 	t.Log("=== Query Callback Debug Test ===")
 
 	// Open database with maximum debug logging
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -27,10 +28,10 @@ func TestQueryCallbackDebug(t *testing.T) {
 
 	// Define our test model
 	type User struct {
-		ID       uint      `gorm:"primaryKey;autoIncrement" json:"id"`
-		Name     string    `gorm:"type:VARCHAR(100);not null" json:"name"`
-		Email    string    `gorm:"type:VARCHAR(255)" json:"email"`
-		Age      int8      `gorm:"type:TINYINT" json:"age"`
+		ID       uint       `gorm:"primaryKey;autoIncrement" json:"id"`
+		Name     string     `gorm:"type:VARCHAR(100);not null" json:"name"`
+		Email    string     `gorm:"type:VARCHAR(255)" json:"email"`
+		Age      int8       `gorm:"type:TINYINT" json:"age"`
 		Birthday *time.Time `gorm:"type:TIMESTAMP" json:"birthday"`
 	}
 
@@ -54,7 +55,7 @@ func TestQueryCallbackDebug(t *testing.T) {
 
 	// Inspect the query callback registration
 	t.Log("\n=== Callback Investigation ===")
-	
+
 	// Check if query callback exists
 	queryCallback := db.Callback().Query()
 	if queryCallback == nil {
@@ -65,9 +66,9 @@ func TestQueryCallbackDebug(t *testing.T) {
 
 	// Try to manually trigger GORM Find with detailed debugging
 	t.Log("\n=== Manual GORM Find Call ===")
-	
+
 	var users []User
-	
+
 	// Try different approaches to see which one generates SQL
 	t.Log("Attempting db.Find(&users)...")
 	findResult := db.Find(&users)
@@ -85,11 +86,11 @@ func TestQueryCallbackDebug(t *testing.T) {
 
 	// Check if any specific method works
 	t.Log("\n=== Testing Direct SQL Generation ===")
-	
+
 	// Test what SQL GORM would generate
 	var dryRunUsers []User
 	dryRunDB := db.Session(&gorm.Session{DryRun: true})
-	
+
 	t.Log("Testing DryRun mode to see SQL generation...")
 	dryRunResult := dryRunDB.Find(&dryRunUsers)
 	t.Logf("DryRun Find result: Error=%v, Statement.SQL=%s", dryRunResult.Error, dryRunResult.Statement.SQL.String())

@@ -12,12 +12,12 @@ import (
 
 // Constants for repeated strings
 const (
-	nullValue    = "NULL"
-	emptyStruct  = "{}"
-	emptyMap     = "MAP {}"
-	pointGeom    = "POINT"
-	polygonGeom  = "POLYGON"
-	jsonType     = "JSON"
+	nullValue   = "NULL"
+	emptyStruct = "{}"
+	emptyMap    = "MAP {}"
+	pointGeom   = "POINT"
+	polygonGeom = "POLYGON"
+	jsonType    = "JSON"
 )
 
 // ===== STRUCT TYPES =====

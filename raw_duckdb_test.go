@@ -5,14 +5,14 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/marcboeker/go-duckdb/v2"
+	"github.com/duckdb/duckdb-go/v2"
 	"github.com/stretchr/testify/require"
 )
 
 func TestRawDuckDBDriver(t *testing.T) {
 	// Test the raw DuckDB driver directly
 	sql.Register("test-duckdb", &duckdb.Driver{})
-	
+
 	db, err := sql.Open("test-duckdb", ":memory:")
 	require.NoError(t, err)
 	defer func() {
@@ -24,7 +24,7 @@ func TestRawDuckDBDriver(t *testing.T) {
 	// Create sequence and table (same pattern as GORM)
 	_, err = db.ExecContext(context.Background(), "CREATE SEQUENCE IF NOT EXISTS seq_test_users_id START 1")
 	require.NoError(t, err)
-	
+
 	_, err = db.ExecContext(context.Background(), `CREATE TABLE test_users (
 		id INTEGER DEFAULT nextval('seq_test_users_id') PRIMARY KEY,
 		name VARCHAR(100),
@@ -35,7 +35,7 @@ func TestRawDuckDBDriver(t *testing.T) {
 	// Insert data
 	result, err := db.ExecContext(context.Background(), "INSERT INTO test_users (name, email) VALUES (?, ?)", "John Doe", "john@example.com")
 	require.NoError(t, err)
-	
+
 	rowsAffected, err := result.RowsAffected()
 	require.NoError(t, err)
 	t.Logf("Rows affected: %d", rowsAffected)

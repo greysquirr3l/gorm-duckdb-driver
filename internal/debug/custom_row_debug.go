@@ -4,6 +4,13 @@ import (
 	"gorm.io/gorm"
 )
 
+// debugLog is a stub for debug logging in this file
+func debugLog(format string, args ...interface{}) {
+	// Simplified debug logging
+	_ = format
+	_ = args
+}
+
 // CustomRowQuery is a debugging version of GORM's RowQuery callback
 func CustomRowQuery(db *gorm.DB) {
 	debugLog(" CustomRowQuery called")

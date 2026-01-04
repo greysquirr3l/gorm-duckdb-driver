@@ -239,7 +239,7 @@ func TestAdvancedMigratorFeatures(t *testing.T) {
 				ct.DatabaseTypeName() // Should not panic
 				ct.ColumnType()       // Should not panic
 				ct.AutoIncrement()    // Should not panic
-				
+
 				// DecimalSize() can panic on some column types, so wrap it
 				func() {
 					defer func() {
@@ -249,10 +249,10 @@ func TestAdvancedMigratorFeatures(t *testing.T) {
 					}()
 					ct.DecimalSize() // May panic for non-decimal types
 				}()
-				
-				ct.ScanType()         // Should not panic
-				ct.Comment()          // Should not panic
-				ct.DefaultValue()     // Should not panic
+
+				ct.ScanType()     // Should not panic
+				ct.Comment()      // Should not panic
+				ct.DefaultValue() // Should not panic
 			}
 		}
 

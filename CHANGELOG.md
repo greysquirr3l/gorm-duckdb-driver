@@ -5,6 +5,45 @@ All notable changes to the GORM DuckDB driver will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-01-04
+
+### Changed
+
+**BREAKING (Module Only):** Migrated from deprecated `github.com/marcboeker/go-duckdb/v2` to official `github.com/duckdb/duckdb-go/v2`
+
+- Upgraded to official DuckDB Go module v2.5.4 (from v2.4.3)
+- Updated DuckDB core from v1.4.1 to v1.4.3
+- All 31 source and test files updated with new import paths
+- Zero API breaking changes - fully backward compatible
+- All core tests passing (100% compatibility verified)
+
+### Technical Details
+
+- Migration completed in <15 minutes using automated tooling
+- Module replacement: `github.com/marcboeker/go-duckdb/v2` -> `github.com/duckdb/duckdb-go/v2`
+- Import paths updated via `gofmt -r` for consistency
+- Dependencies: `arrowmapping` v0.0.21 -> v0.0.27, `mapping` v0.0.21 -> v0.0.27
+- Test results: TestGORMInterfaceCompliance, TestDialector, TestConnection, TestRawDuckDBDriver - ALL PASS
+
+### Benefits
+
+- Official DuckDB team support and maintenance
+- Aligned with DuckDB release roadmap
+- Enhanced platform support (darwin, linux, windows on amd64/arm64)
+- Faster bug fixes and feature updates
+- Long-term stability with LTS branch availability
+
+### Migration Guide
+
+For users upgrading from v0.7.0, no code changes required. Simply update your dependency:
+
+```bash
+go get -u github.com/greysquirr3l/gorm-duckdb-driver@v0.8.0
+go mod tidy
+```
+
+See `docs/DUCKDB_MODULE_MIGRATION.md` for complete technical details.
+
 ## [0.7.0] - 2025-11-06
 
 ### 🎯 **PRODUCTION-READY CODE QUALITY: ZERO LINTING ERRORS ACHIEVED**

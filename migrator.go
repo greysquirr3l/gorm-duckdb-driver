@@ -793,8 +793,8 @@ func (m Migrator) CreateTable(values ...interface{}) error {
 				for _, field := range stmt.Schema.Fields {
 					if field.PrimaryKey && (field.AutoIncrement || (!field.HasDefaultValue && field.DataType == schema.Uint)) {
 						sequenceName := "seq_" + strings.ToLower(stmt.Schema.Table) + "_" + strings.ToLower(field.DBName)
-					createSeqSQL := fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s START 1", sequenceName)
-					_, err := sqlDB.ExecContext(context.Background(), createSeqSQL)
+						createSeqSQL := fmt.Sprintf("CREATE SEQUENCE IF NOT EXISTS %s START 1", sequenceName)
+						_, err := sqlDB.ExecContext(context.Background(), createSeqSQL)
 						if err != nil {
 							// Ignore "already exists" errors
 							if !isAlreadyExistsError(err) {

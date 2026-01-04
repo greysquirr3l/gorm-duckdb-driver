@@ -3,6 +3,7 @@ package duckdb
 import (
 	"testing"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 )
 
@@ -11,7 +12,7 @@ func TestRowCallbackWorkaroundConfiguration(t *testing.T) {
 
 	// Test 1: Default behavior (workaround enabled)
 	t.Run("Default_Workaround_Enabled", func(t *testing.T) {
-		db, err := gorm.Open(Open(":memory:"), &gorm.Config{})
+		db, err := gorm.Open(duckdb.Open(":memory:"), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("Failed to connect: %v", err)
 		}
@@ -30,13 +31,13 @@ func TestRowCallbackWorkaroundConfiguration(t *testing.T) {
 		if result != 1 {
 			t.Fatalf("Expected result=1, got %d", result)
 		}
-		
+
 		t.Log("✅ Default workaround behavior working")
 	})
 
 	// Test 2: Explicitly enabled workaround
 	t.Run("Explicit_Workaround_Enabled", func(t *testing.T) {
-		db, err := gorm.Open(OpenWithRowCallbackWorkaround(":memory:", true), &gorm.Config{})
+		db, err := gorm.Open(duckdb.OpenWithRowCallbackWorkaround(":memory:", true), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("Failed to connect: %v", err)
 		}
@@ -54,18 +55,18 @@ func TestRowCallbackWorkaroundConfiguration(t *testing.T) {
 		if result != 2 {
 			t.Fatalf("Expected result=2, got %d", result)
 		}
-		
+
 		t.Log("✅ Explicitly enabled workaround working")
 	})
 
 	// Test 3: Configuration via Config struct
 	t.Run("Config_Struct_Workaround", func(t *testing.T) {
 		enabled := true
-		config := &Config{
+		config := &duckdb.Config{
 			RowCallbackWorkaround: &enabled,
 		}
-		
-		db, err := gorm.Open(OpenWithConfig(":memory:", config), &gorm.Config{})
+
+		db, err := gorm.Open(duckdb.OpenWithConfig(":memory:", config), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("Failed to connect: %v", err)
 		}
@@ -83,7 +84,7 @@ func TestRowCallbackWorkaroundConfiguration(t *testing.T) {
 		if result != 3 {
 			t.Fatalf("Expected result=3, got %d", result)
 		}
-		
+
 		t.Log("✅ Config struct workaround working")
 	})
 
@@ -91,7 +92,7 @@ func TestRowCallbackWorkaroundConfiguration(t *testing.T) {
 	// Note: This test documents the intended behavior for when GORM fixes the bug
 	t.Run("Future_Workaround_Disabled", func(t *testing.T) {
 		// Create dialector with workaround explicitly disabled
-		db, err := gorm.Open(OpenWithRowCallbackWorkaround(":memory:", false), &gorm.Config{})
+		db, err := gorm.Open(duckdb.OpenWithRowCallbackWorkaround(":memory:", false), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("Failed to connect: %v", err)
 		}
@@ -99,7 +100,7 @@ func TestRowCallbackWorkaroundConfiguration(t *testing.T) {
 		// In the current GORM version with the bug, this will return nil
 		// In future GORM versions (when fixed), this should work
 		row := db.Raw("SELECT 4").Row()
-		
+
 		// For now, we expect this to fail since we know GORM has the bug
 		// When GORM fixes the bug, this test should pass
 		if row == nil {
@@ -122,7 +123,7 @@ func TestWorkaroundCompatibility(t *testing.T) {
 
 	// Test both Rows() and Row() work correctly with our callback
 	t.Run("Rows_And_Row_Compatibility", func(t *testing.T) {
-		db, err := gorm.Open(Open(":memory:"), &gorm.Config{})
+		db, err := gorm.Open(duckdb.Open(":memory:"), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("Failed to connect: %v", err)
 		}
@@ -167,7 +168,7 @@ func TestWorkaroundCompatibility(t *testing.T) {
 
 	// Test error handling
 	t.Run("Error_Handling", func(t *testing.T) {
-		db, err := gorm.Open(Open(":memory:"), &gorm.Config{})
+		db, err := gorm.Open(duckdb.Open(":memory:"), &gorm.Config{})
 		if err != nil {
 			t.Fatalf("Failed to connect: %v", err)
 		}

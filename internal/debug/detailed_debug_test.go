@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
@@ -24,8 +25,8 @@ func TestDetailedCallbackDebug(t *testing.T) {
 	}()
 
 	// Setup DuckDB with extra debugging
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -72,7 +73,7 @@ func TestDetailedCallbackDebug(t *testing.T) {
 	})
 
 	type SimpleModel struct {
-		ID   uint   `gorm:"primaryKey;autoIncrement"`
+		ID   uint `gorm:"primaryKey;autoIncrement"`
 		Name string
 	}
 
@@ -85,10 +86,10 @@ func TestDetailedCallbackDebug(t *testing.T) {
 
 	// Create test record with detailed debugging
 	model := SimpleModel{Name: "Test"}
-	
+
 	t.Log("About to call db.Create()...")
 	result := db.Create(&model)
-	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d", 
+	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d",
 		result.Error, result.RowsAffected, model.ID)
 }
 
@@ -106,8 +107,8 @@ func TestStatementBuilding(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -120,7 +121,7 @@ func TestStatementBuilding(t *testing.T) {
 	}
 
 	type SimpleModel struct {
-		ID   uint   `gorm:"primaryKey;autoIncrement"`
+		ID   uint `gorm:"primaryKey;autoIncrement"`
 		Name string
 	}
 
@@ -133,21 +134,25 @@ func TestStatementBuilding(t *testing.T) {
 	// Manually build and test the statement using proper GORM pattern
 	model := SimpleModel{Name: "Manual Test"}
 	stmt := db.Statement
-	stmt.Parse(&model)
-	
+	if err := stmt.Parse(&model); err != nil {
+		t.Fatalf("Failed to parse model: %v", err)
+	}
+
 	t.Logf("Manual statement parse:")
 	t.Logf("  Schema: %+v", stmt.Schema)
 	t.Logf("  Table: %s", stmt.Table)
-	
+
 	// Try to build the SQL manually using GORM's clause system with proper initialization
 	tx := db.Session(&gorm.Session{DryRun: true})
-	tx.Statement.Parse(&model)
+	if err := tx.Statement.Parse(&model); err != nil {
+		t.Fatalf("Failed to parse model: %v", err)
+	}
 	tx.Statement.AddClause(clause.Insert{})
 	tx.Statement.AddClause(clause.Values{Columns: []clause.Column{{Name: "name"}}, Values: [][]interface{}{{"Manual Test"}}})
-	
+
 	// Build the statement
 	tx.Statement.Build("INSERT")
-	
+
 	t.Logf("Manual statement build:")
 	t.Logf("  SQL: %s", tx.Statement.SQL.String())
 	t.Logf("  Vars: %+v", tx.Statement.Vars)

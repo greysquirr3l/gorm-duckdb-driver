@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -23,8 +24,8 @@ func TestGORMSelectSQL(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -38,9 +39,9 @@ func TestGORMSelectSQL(t *testing.T) {
 	}
 
 	type User struct {
-		ID       uint      `gorm:"primaryKey;autoIncrement"`
-		Name     string    `gorm:"size:100;not null"`
-		Email    string    `gorm:"size:255"`
+		ID       uint   `gorm:"primaryKey;autoIncrement"`
+		Name     string `gorm:"size:100;not null"`
+		Email    string `gorm:"size:255"`
 		Age      uint8
 		Birthday time.Time
 	}
@@ -60,7 +61,7 @@ func TestGORMSelectSQL(t *testing.T) {
 	}
 
 	result := db.Create(&user)
-	t.Logf("Create result: Error=%v, RowsAffected=%d, User.ID=%d", 
+	t.Logf("Create result: Error=%v, RowsAffected=%d, User.ID=%d",
 		result.Error, result.RowsAffected, user.ID)
 
 	// Verify the data exists with raw SQL
@@ -72,7 +73,7 @@ func TestGORMSelectSQL(t *testing.T) {
 	t.Log("\n=== Testing GORM Find (watch for generated SQL) ===")
 	var users []User
 	result = db.Find(&users)
-	t.Logf("Find result: Error=%v, RowsAffected=%d, Count=%d", 
+	t.Logf("Find result: Error=%v, RowsAffected=%d, Count=%d",
 		result.Error, result.RowsAffected, len(users))
 
 	// Test GORM First - this will show the generated SQL in logs

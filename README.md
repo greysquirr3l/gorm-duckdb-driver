@@ -26,27 +26,13 @@ go get -u gorm.io/gorm
 go get -u github.com/greysquirr3l/gorm-duckdb-driver
 ```
 
-**Step 2:** Add replace directive to your `go.mod`:
-
-```go
-module your-project
-
-go 1.24
-
-require (
-    github.com/greysquirr3l/gorm-duckdb-driver v0.7.0
-    gorm.io/gorm v1.31.1
-)
-
-// Replace directive for latest release
-replace github.com/greysquirr3l/gorm-duckdb-driver => github.com/greysquirr3l/gorm-duckdb-driver v0.7.0
-```
-
-**Step 3:** Run `go mod tidy`:
+**Step 2:** Run `go mod tidy`:
 
 ```bash
 go mod tidy
 ```
+
+**Note:** Version 0.8.0+ uses the official `github.com/duckdb/duckdb-go/v2` module instead of the deprecated `github.com/marcboeker/go-duckdb/v2`. The migration is fully backward compatible with zero breaking changes.
 
 ### Connect to Database
 

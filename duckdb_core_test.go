@@ -372,7 +372,9 @@ func TestBeforeCreateCallback(t *testing.T) {
 
 	// Parse the model to create a valid statement
 	var model TestModel
-	db.Statement.Parse(&model)
+	if err := db.Statement.Parse(&model); err != nil {
+		t.Fatalf("Failed to parse model: %v", err)
+	}
 
 	// Should not panic
 	beforeCreateCallback(db)

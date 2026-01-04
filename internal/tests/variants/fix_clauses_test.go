@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
@@ -23,8 +24,8 @@ func TestFixStatementClauses(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -58,7 +59,7 @@ func TestFixStatementClauses(t *testing.T) {
 	})
 
 	type SimpleModel struct {
-		ID   uint   `gorm:"primaryKey;autoIncrement"`
+		ID   uint `gorm:"primaryKey;autoIncrement"`
 		Name string
 	}
 
@@ -71,7 +72,7 @@ func TestFixStatementClauses(t *testing.T) {
 	// Test create
 	model := SimpleModel{Name: "Test with fixed clauses"}
 	result := db.Create(&model)
-	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d", 
+	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d",
 		result.Error, result.RowsAffected, model.ID)
 }
 
@@ -80,8 +81,8 @@ func TestGORMVersion(t *testing.T) {
 	t.Log("=== GORM Version Test ===")
 
 	// Test if we can reproduce the issue with a minimal setup
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -93,7 +94,7 @@ func TestGORMVersion(t *testing.T) {
 
 	// Manually create a statement like GORM does
 	stmt := &gorm.Statement{DB: db}
-	
+
 	// This should not panic if GORM is working correctly
 	defer func() {
 		if r := recover(); r != nil {
@@ -102,12 +103,12 @@ func TestGORMVersion(t *testing.T) {
 	}()
 
 	type TestModel struct {
-		ID   uint   `gorm:"primaryKey"`
+		ID   uint `gorm:"primaryKey"`
 		Name string
 	}
 
 	model := TestModel{Name: "Test"}
-	
+
 	// Test statement parsing
 	err = stmt.Parse(&model)
 	if err != nil {
@@ -118,7 +119,7 @@ func TestGORMVersion(t *testing.T) {
 
 	// Check if Clauses is nil after Parse
 	t.Logf("Clauses after Parse: %+v (nil? %t)", stmt.Clauses, stmt.Clauses == nil)
-	
+
 	// Try to access Statement fields that should be initialized
 	t.Logf("Statement.DB: %T", stmt.DB)
 	t.Logf("Statement.Dest: %+v", stmt.Dest)

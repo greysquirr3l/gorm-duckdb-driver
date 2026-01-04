@@ -1,7 +1,10 @@
+// Package duckdb contains debug tests for array functionality.
 package duckdb
 
 import (
 	"testing"
+
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 )
 
 // Corrected array minimal tests based on actual implementation behavior
@@ -64,9 +67,8 @@ func TestFormatSliceForDuckDB_Corrected(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, err := formatSliceForDuckDB(tt.input)
-
+			t.Run(tt.name, func(t *testing.T) {
+				result, err := duckdb.FormatSliceForDuckDB(tt.input)
 			if tt.wantErr {
 				if err == nil {
 					t.Errorf("Expected error for %s but got none", tt.name)
@@ -108,7 +110,7 @@ func TestArrayLiteral_Corrected(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			arrayLit := ArrayLiteral{Data: tt.data}
+			arrayLit := duckdb.ArrayLiteral{Data: tt.data}
 			value, err := arrayLit.Value()
 
 			if err != nil {
@@ -122,9 +124,9 @@ func TestArrayLiteral_Corrected(t *testing.T) {
 }
 
 func TestSimpleArrayScanner_Corrected(t *testing.T) {
-	// Note: SimpleArrayScanner requires pointer to slice in Target field
+	// Note: duckdb.SimpleArrayScanner requires pointer to slice in Target field
 	t.Run("scan_with_no_target", func(t *testing.T) {
-		scanner := &SimpleArrayScanner{}
+		scanner := &duckdb.SimpleArrayScanner{}
 
 		// This test validates the error when Target is not set
 		err := scanner.Scan("['hello', 'world']")
@@ -139,7 +141,7 @@ func TestSimpleArrayScanner_Corrected(t *testing.T) {
 
 	t.Run("scan_with_wrong_target_type", func(t *testing.T) {
 		var notASlice string
-		scanner := &SimpleArrayScanner{Target: &notASlice}
+		scanner := &duckdb.SimpleArrayScanner{Target: &notASlice}
 
 		// Test with wrong target type
 		err := scanner.Scan("['hello', 'world']")
@@ -157,7 +159,7 @@ func TestSimpleArrayScanner_Corrected(t *testing.T) {
 
 	t.Run("scan_with_proper_target", func(t *testing.T) {
 		var target []string
-		scanner := &SimpleArrayScanner{Target: &target}
+		scanner := &duckdb.SimpleArrayScanner{Target: &target}
 
 		// Test proper usage
 		err := scanner.Scan("['hello', 'world']")
@@ -172,7 +174,7 @@ func TestSimpleArrayScanner_Corrected(t *testing.T) {
 
 	t.Run("scan_empty_array", func(t *testing.T) {
 		var target []string
-		scanner := &SimpleArrayScanner{Target: &target}
+		scanner := &duckdb.SimpleArrayScanner{Target: &target}
 
 		err := scanner.Scan("[]")
 		if err != nil {
@@ -184,7 +186,7 @@ func TestSimpleArrayScanner_Corrected(t *testing.T) {
 
 	t.Run("scan_nil_value", func(t *testing.T) {
 		var target []string
-		scanner := &SimpleArrayScanner{Target: &target}
+		scanner := &duckdb.SimpleArrayScanner{Target: &target}
 
 		err := scanner.Scan(nil)
 		if err != nil {
@@ -195,7 +197,7 @@ func TestSimpleArrayScanner_Corrected(t *testing.T) {
 
 // Additional coverage for edge cases and error paths
 func TestArrayMinimalCoverage(t *testing.T) {
-	t.Run("formatSliceForDuckDB_comprehensive", func(t *testing.T) {
+	t.Run("duckdb.FormatSliceForDuckDB_comprehensive", func(t *testing.T) {
 		// Cover all basic types
 		types := map[string]interface{}{
 			"int8":    []int8{1, 2},
@@ -214,7 +216,7 @@ func TestArrayMinimalCoverage(t *testing.T) {
 
 		for typeName, slice := range types {
 			t.Run(typeName, func(t *testing.T) {
-				result, err := formatSliceForDuckDB(slice)
+				result, err := duckdb.FormatSliceForDuckDB(slice)
 				if err != nil {
 					t.Logf("Error for %s: %v", typeName, err)
 				} else {
@@ -236,7 +238,7 @@ func TestArrayMinimalCoverage(t *testing.T) {
 
 		for name, input := range errorCases {
 			t.Run(name, func(t *testing.T) {
-				_, err := formatSliceForDuckDB(input)
+				_, err := duckdb.FormatSliceForDuckDB(input)
 				if err == nil {
 					t.Errorf("Expected error for %s", name)
 				} else {

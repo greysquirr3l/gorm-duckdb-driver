@@ -77,6 +77,7 @@ func (d MinimalDialector) Explain(sql string, _ ...interface{}) string {
 }
 
 // Test with minimal dialector
+//
 //nolint:errcheck,gosec // Test function with debug callbacks
 func TestMinimalDialector(t *testing.T) {
 	t.Log("=== Minimal Dialector Test ===")
@@ -102,13 +103,13 @@ func TestMinimalDialector(t *testing.T) {
 		}
 	}()
 
-	// Create minimal dialector  
+	// Create minimal dialector
 	dialector := MinimalDialector{DSN: ":memory:"}
 
 	// Open GORM with minimal dialector
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger:      logger.Default.LogMode(logger.Info),
-		ConnPool:    rawDB,  // Use our raw connection
+		Logger:   logger.Default.LogMode(logger.Info),
+		ConnPool: rawDB, // Use our raw connection
 	})
 	if err != nil {
 		t.Fatalf("Failed to open GORM with minimal dialector: %v", err)
@@ -125,7 +126,7 @@ func TestMinimalDialector(t *testing.T) {
 
 	// Simple model
 	type SimpleModel struct {
-		ID   int    `gorm:"primaryKey"`
+		ID   int `gorm:"primaryKey"`
 		Name string
 	}
 

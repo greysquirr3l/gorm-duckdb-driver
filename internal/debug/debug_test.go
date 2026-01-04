@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -17,7 +18,7 @@ type DebugUser struct {
 }
 
 func TestDebugTableStructure(t *testing.T) {
-	db, err := gorm.Open(Open(":memory:"), &gorm.Config{
+	db, err := gorm.Open(duckdb.Open(":memory:"), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info), // Enable SQL logging
 	})
 	if err != nil {

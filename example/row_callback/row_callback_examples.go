@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"log"
 
-	"gorm.io/gorm"
 	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
+	"gorm.io/gorm"
 )
 
 func main() {
@@ -66,7 +66,7 @@ func main() {
 	// Example 4: Future-proof - disable workaround for newer GORM versions
 	fmt.Println("\n=== Example 4: Future-Proof (Workaround Disabled) ===")
 	fmt.Println("This is for when GORM fixes the RowQuery callback bug...")
-	
+
 	db4, err := gorm.Open(duckdb.OpenWithRowCallbackWorkaround(":memory:", false), &gorm.Config{})
 	if err != nil {
 		log.Fatal(err)

@@ -31,7 +31,7 @@ func TestNativeArrayValidation(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, []string{"hello", "world"}, stringArr.Get())
 
-		var intArr duckdb.IntArray  
+		var intArr duckdb.IntArray
 		err = db.Raw("SELECT array[1, 2, 3]").Scan(&intArr).Error
 		require.NoError(t, err)
 		assert.Equal(t, []int64{1, 2, 3}, intArr.Get())

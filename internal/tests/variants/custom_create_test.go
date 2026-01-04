@@ -5,17 +5,26 @@ import (
 	"reflect"
 	"testing"
 
+	duckdb "github.com/greysquirr3l/gorm-duckdb-driver"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	"gorm.io/gorm/logger"
 	"gorm.io/gorm/schema"
 )
 
+// debugLog prints debug messages (copied from parent package)
+func debugLog(format string, args ...interface{}) {
+	// Simplified debug logging for tests
+	_ = format
+	_ = args
+}
+
 // Custom CREATE callback to replace GORM's broken one
+//
 //nolint:gocyclo // Complex function handling comprehensive GORM CREATE integration
 func customCreateCallback(db *gorm.DB) {
 	debugLog("customCreateCallback called")
-	
+
 	if db.Error != nil {
 		debugLog("customCreateCallback: early exit due to error: %v", db.Error)
 		return
@@ -24,35 +33,35 @@ func customCreateCallback(db *gorm.DB) {
 	// Build INSERT statement manually
 	if db.Statement.Schema != nil {
 		debugLog("customCreateCallback: building INSERT for table %s", db.Statement.Schema.Table)
-		
+
 		// Get all fields that should be inserted
 		var columns []clause.Column
 		var values []interface{}
-		
+
 		for _, field := range db.Statement.Schema.Fields {
 			// Skip auto-increment primary keys (they'll be handled by RETURNING)
 			if field.PrimaryKey && field.AutoIncrement {
 				debugLog("customCreateCallback: skipping auto-increment field %s", field.Name)
 				continue
 			}
-			
+
 			// Get field value from the model
 			fieldValue := db.Statement.ReflectValue.FieldByName(field.Name).Interface()
 			debugLog("customCreateCallback: adding field %s = %v", field.DBName, fieldValue)
 			columns = append(columns, clause.Column{Name: field.DBName})
 			values = append(values, fieldValue)
 		}
-		
+
 		if len(columns) > 0 {
 			// Add INSERT clause
 			db.Statement.AddClause(clause.Insert{Table: clause.Table{Name: db.Statement.Table}})
-			
+
 			// Add VALUES clause
 			db.Statement.AddClause(clause.Values{
 				Columns: columns,
 				Values:  [][]interface{}{values},
 			})
-			
+
 			// For auto-increment fields, add RETURNING clause
 			hasAutoIncrement := false
 			var autoIncrementField *schema.Field
@@ -63,19 +72,19 @@ func customCreateCallback(db *gorm.DB) {
 					break
 				}
 			}
-			
+
 			if hasAutoIncrement {
 				debugLog("customCreateCallback: adding RETURNING for field %s", autoIncrementField.DBName)
 				db.Statement.AddClause(clause.Returning{
 					Columns: []clause.Column{{Name: autoIncrementField.DBName}},
 				})
 			}
-			
+
 			// Build and execute the statement
 			db.Statement.Build("INSERT", "VALUES", "RETURNING")
 			debugLog("customCreateCallback: generated SQL: %s", db.Statement.SQL.String())
 			debugLog("customCreateCallback: vars: %+v", any(db.Statement.Vars))
-			
+
 			// Execute the statement
 			if hasAutoIncrement {
 				// Use QueryRow for RETURNING
@@ -87,7 +96,7 @@ func customCreateCallback(db *gorm.DB) {
 				} else {
 					db.RowsAffected = 1
 					debugLog("customCreateCallback: QueryRow succeeded, ID: %v", id)
-					
+
 					// Set the ID back to the model
 					if autoIncrementField != nil {
 						// Get the struct value (dereference pointer if needed)
@@ -95,37 +104,37 @@ func customCreateCallback(db *gorm.DB) {
 						if structValue.Kind() == reflect.Ptr {
 							structValue = structValue.Elem()
 						}
-						
+
 						fieldValue := structValue.FieldByName(autoIncrementField.Name)
-						debugLog("customCreateCallback: Setting field %s, Valid: %t, CanSet: %t, Kind: %s", 
+						debugLog("customCreateCallback: Setting field %s, Valid: %t, CanSet: %t, Kind: %s",
 							autoIncrementField.Name, fieldValue.IsValid(), fieldValue.CanSet(), fieldValue.Kind())
-						
+
 						if fieldValue.IsValid() && fieldValue.CanSet() {
 							debugLog("customCreateCallback: ID value type: %T, value: %v", id, id)
 							switch fieldValue.Kind() {
 							case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 								var uintVal uint64
 								switch v := id.(type) {
-							case uint64:
-								uintVal = v
-							case int64:
-								if v < 0 {
-									debugLog("customCreateCallback: Negative int64 %d cannot be converted to uint64", v)
-									return
-								}
-								uintVal = uint64(v)
-							case int32:
-								if v < 0 {
-									debugLog("customCreateCallback: Negative int32 %d cannot be converted to uint64", v)
-									return
-								}
-								uintVal = uint64(v)
-							case int:
-								if v < 0 {
-									debugLog("customCreateCallback: Negative int %d cannot be converted to uint64", v)
-									return
-								}
-								uintVal = uint64(v)
+								case uint64:
+									uintVal = v
+								case int64:
+									if v < 0 {
+										debugLog("customCreateCallback: Negative int64 %d cannot be converted to uint64", v)
+										return
+									}
+									uintVal = uint64(v)
+								case int32:
+									if v < 0 {
+										debugLog("customCreateCallback: Negative int32 %d cannot be converted to uint64", v)
+										return
+									}
+									uintVal = uint64(v)
+								case int:
+									if v < 0 {
+										debugLog("customCreateCallback: Negative int %d cannot be converted to uint64", v)
+										return
+									}
+									uintVal = uint64(v)
 								default:
 									debugLog("customCreateCallback: Could not convert ID %v (%T) to uint", id, id)
 									return
@@ -135,14 +144,14 @@ func customCreateCallback(db *gorm.DB) {
 							case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 								var intVal int64
 								switch v := id.(type) {
-							case int64:
-								intVal = v
-							case uint64:
-								if v > 9223372036854775807 { // math.MaxInt64
-									debugLog("customCreateCallback: uint64 %d exceeds int64 maximum", v)
-									return
-								}
-								intVal = int64(v)
+								case int64:
+									intVal = v
+								case uint64:
+									if v > 9223372036854775807 { // math.MaxInt64
+										debugLog("customCreateCallback: uint64 %d exceeds int64 maximum", v)
+										return
+									}
+									intVal = int64(v)
 								case int32:
 									intVal = int64(v)
 								case int:
@@ -193,8 +202,8 @@ func TestCustomCreateCallback(t *testing.T) {
 		}
 	}()
 
-	dialector := Dialector{
-		Config: &Config{
+	dialector := duckdb.Dialector{
+		Config: &duckdb.Config{
 			DSN: ":memory:",
 		},
 	}
@@ -216,7 +225,7 @@ func TestCustomCreateCallback(t *testing.T) {
 	}
 
 	type SimpleModel struct {
-		ID   uint   `gorm:"primaryKey;autoIncrement"`
+		ID   uint `gorm:"primaryKey;autoIncrement"`
 		Name string
 	}
 
@@ -229,14 +238,14 @@ func TestCustomCreateCallback(t *testing.T) {
 	// Test create with custom callback
 	model := SimpleModel{Name: "Custom Callback Test"}
 	result := db.Create(&model)
-	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d", 
+	t.Logf("Create result: Error=%v, RowsAffected=%d, ID=%d",
 		result.Error, result.RowsAffected, model.ID)
 
 	// Verify the record was actually created
 	var count int64
 	db.Model(&SimpleModel{}).Count(&count)
 	t.Logf("Total records in table: %d", count)
-	
+
 	// Verify we can read it back
 	var retrieved SimpleModel
 	err = db.First(&retrieved).Error

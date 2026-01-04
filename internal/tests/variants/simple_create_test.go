@@ -31,17 +31,17 @@ func TestSimpleCreate(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Log("=== Starting Create operation ===")
-	
+
 	// Create a simple user
 	user := SimpleUser{
 		Name:  "Test User",
-		Email: "test@example.com", 
+		Email: "test@example.com",
 		Age:   25,
 	}
-	
+
 	result := db.Create(&user)
 	t.Logf("Create result: Error=%v, RowsAffected=%d", result.Error, result.RowsAffected)
 	t.Logf("User after create: %+v", user)
-	
+
 	require.NoError(t, result.Error)
 }
